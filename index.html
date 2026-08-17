@@ -182,7 +182,12 @@ input.codein{text-align:center;font-size:26px;letter-spacing:.16em;font-weight:8
 .big-result .meta{font-size:12.5px;color:var(--muted);margin-top:6px}
 .notice{font-size:12.5px;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:11px 13px;margin-top:12px}
 .notice.done{background:var(--ok-soft);color:var(--ok)}
-.notice.done b{color:var(--text)}
+.notice.warn{background:var(--no-soft);color:var(--no)}
+.notice.done b, .notice.warn b{color:var(--text)}
+.card.danger{border-color:rgba(225,29,72,.35)}
+button.danger-btn{color:var(--no);border-color:rgba(225,29,72,.4)}
+button.danger-btn:hover{background:var(--no-soft);border-color:var(--no)}
+#delCode{text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 dl.info{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0 0 16px;font-size:12.5px}
 dl.info dt{color:var(--muted)}
 dl.info dd{margin:0;color:var(--text);font-weight:600}
@@ -441,6 +446,24 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
       <p class="sub">사용성 테스트용 행동로그입니다.</p>
       <button class="sec" id="expLog">이벤트 로그 CSV 내보내기</button>
       <div class="notice">회의 정보와 팀원 응답은 자동으로 지워지지 않습니다. 확정한 뒤에도 이 화면에서 계속 확인하고, 확정 순위를 다시 바꿀 수 있습니다.</div>
+    </div>
+
+    <div class="card danger">
+      <h2>회의 삭제</h2>
+      <p class="sub">회의 정보와 팀원 응답, 확정 결과가 모두 지워집니다. 되돌릴 수 없습니다.</p>
+      <button class="sec danger-btn" id="delStart">이 회의 삭제하기</button>
+      <div id="delBox" style="display:none">
+        <div class="notice warn" id="delWarn"></div>
+        <div class="field" style="margin:14px 0 0">
+          <label class="f" for="delCode">확인을 위해 회의 코드를 입력하세요</label>
+          <input type="text" id="delCode" placeholder="6자리 회의 코드" maxlength="6" autocomplete="off">
+        </div>
+        <div class="err" id="delErr"></div>
+        <div class="split">
+          <button class="sec" id="delCancel">취소</button>
+          <button class="sec danger-btn" id="delConfirm">영구 삭제</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -960,6 +983,31 @@ function renderDash(m){
   fillPickSelects(m);
   drawHeat(m);
   pickKey = null; $("pickBox").innerHTML = "";
+  resetDelBox();
+}
+/* ---------- 회의 삭제 ---------- */
+function resetDelBox(){
+  $("delBox").style.display = "none";
+  $("delStart").style.display = "";
+  $("delCode").value = "";
+  $("delErr").textContent = "";
+}
+function deleteMeeting(){
+  var m = getMeeting(activeCode); if(!m) return;
+  if($("delCode").value.trim().toUpperCase() !== m.code){
+    $("delErr").textContent = "회의 코드가 일치하지 않습니다.";
+    return;
+  }
+  var all = meetings();
+  delete all[m.code];
+  save(K.M, all);
+  save(K.O, load(K.O, []).filter(function(c){ return c !== m.code; }));
+  delete authed[m.code];
+  log("meeting_delete", m.code, "leader", "응답"+m.responses.length+"명");
+  activeCode = null;
+  resetDelBox();
+  renderHome(); show("home");
+  toast("회의를 삭제했습니다");
 }
 /* 확정 순위 선택 상자: 모든 시간칸을 시간순으로 담고, 기본값은 추천 1·2·3순위 */
 function fillPickSelects(m){
@@ -1215,6 +1263,22 @@ $("dashPaste").onclick = function(){
 };
 $("expLog").onclick = exportCsv;
 $("doConfirm").onclick = submitPicks;
+
+$("delStart").onclick = function(){
+  var m = getMeeting(activeCode); if(!m) return;
+  var pk = picksOf(m);
+  $("delWarn").innerHTML = "<b>"+esc(m.title)+"</b> (회의 코드 "+m.code+")를 지웁니다.<br>"+
+    "팀원 응답 <b>"+m.responses.length+"명</b>"+
+    (pk ? " · 확정된 1순위 <b>"+whenText(m, pk[0].d, pk[0].h)+"</b>" : "")+
+    "이 함께 사라지고 되돌릴 수 없습니다.";
+  $("delStart").style.display = "none";
+  $("delBox").style.display = "block";
+  setTimeout(function(){ $("delCode").focus(); }, 60);
+};
+$("delCancel").onclick = resetDelBox;
+$("delConfirm").onclick = deleteMeeting;
+$("delCode").addEventListener("input", function(){ this.value = this.value.toUpperCase(); $("delErr").textContent = ""; });
+$("delCode").addEventListener("keydown", function(e){ if(e.key === "Enter") deleteMeeting(); });
 
 $("leadBtn").onclick = doLeadAuth;
 $("leadPin").addEventListener("keydown", function(e){ if(e.key === "Enter") doLeadAuth(); });
