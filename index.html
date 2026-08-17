@@ -10,7 +10,10 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-SPGJSWT6JJ');
+  // 주소 뒤에 ?ga_debug=1 을 붙여 열면 GA4 DebugView에 이벤트가 즉시 나타난다.
+  // 평소 방문에는 영향이 없다.
+  gtag('config', 'G-SPGJSWT6JJ',
+       /[?&]ga_debug=1/.test(location.search) ? {debug_mode: true} : {});
 </script>
 
 <!--ARTIFACT-START-->
