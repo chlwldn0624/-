@@ -142,6 +142,17 @@ input.codein{text-align:center;font-size:26px;letter-spacing:.16em;font-weight:8
 .heat{height:30px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent}
 .heat.pick{outline:2px solid var(--brand);outline-offset:1px}
 
+/* 시간칸별 이름 내역 */
+.who{display:grid;gap:6px;margin-top:13px}
+.whorow{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:baseline;font-size:12.5px;padding:8px 11px;border-radius:9px;background:var(--surface-2)}
+.whorow .wl{font-size:11.5px;font-weight:800;letter-spacing:-.01em}
+.whorow .wn{font-weight:600;color:var(--text);word-break:keep-all}
+.whorow .wn.none{font-weight:400;color:var(--faint)}
+.whorow.pf{background:var(--pref-soft)} .whorow.pf .wl{color:var(--pref)}
+.whorow.okr{background:var(--ok-soft)} .whorow.okr .wl{color:var(--ok)}
+.whorow.nor{background:var(--no-soft)} .whorow.nor .wl{color:var(--no)}
+@media (max-width:420px){ .whorow{grid-template-columns:1fr;gap:3px} }
+
 /* candidates */
 .cand{border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:10px;background:var(--surface)}
 .cand.best{border-color:var(--brand);background:var(--brand-soft)}
@@ -420,7 +431,7 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
 
     <div class="card">
       <h2>전체 시간표</h2>
-      <p class="sub">숫자는 참석 가능 인원, ⭐는 선호 표시 수입니다. 칸을 눌러 직접 확정할 수도 있습니다.</p>
+      <p class="sub">숫자는 참석 가능 인원, ⭐는 선호 표시 수입니다. <b>칸을 누르면 누가 선호·가능·불가능을 골랐는지</b> 이름으로 보이고, 그 시간을 1순위로 올릴 수 있습니다.</p>
       <div class="gridwrap"><div class="tgrid" id="heatGrid"></div></div>
       <div id="pickBox"></div>
     </div>
@@ -818,13 +829,16 @@ function decodeResp(text){
 function tally(m){
   var sl = slots(m), total = m.responses.length;
   return sl.map(function(s){
-    var avail = 0, pref = 0, absent = [];
+    var prefNames = [], okNames = [], absent = [];
     m.responses.forEach(function(r){
       var v = r.slots[s.key] || "ok";
       if(v === "no") absent.push(r.name);
-      else { avail++; if(v === "prefer") pref++; }
+      else if(v === "prefer") prefNames.push(r.name);
+      else okNames.push(r.name);
     });
-    return {d:s.d, h:s.h, key:s.key, avail:avail, pref:pref, absent:absent,
+    var pref = prefNames.length, avail = pref + okNames.length;
+    return {d:s.d, h:s.h, key:s.key, avail:avail, pref:pref,
+            prefNames:prefNames, okNames:okNames, absent:absent,
             all:(total>0 && avail===total), score:pref*2 + (avail-pref)};
   });
 }
@@ -987,6 +1001,23 @@ function submitPicks(){
   }
   confirmPicks(m.code, vals, false);
 }
+/* 한 시간칸을 누구가 어떻게 골랐는지 이름으로 펼쳐 보여준다 */
+function whoRows(c, n){
+  if(!n) return '<div class="notice" style="margin-top:12px">아직 응답한 팀원이 없습니다.</div>';
+  function row(cls, mk, label, names){
+    return '<div class="whorow '+cls+'">'+
+      '<span class="wl">'+(mk?mk+" ":"")+label+' '+names.length+'명</span>'+
+      (names.length
+        ? '<span class="wn">'+names.map(esc).join(", ")+'</span>'
+        : '<span class="wn none">없음</span>')+
+      '</div>';
+  }
+  return '<div class="who">'+
+    row("pf", "★", "선호", c.prefNames)+
+    row("okr", "", "가능", c.okNames)+
+    row("nor", "✕", "불가능", c.absent)+
+    '</div>';
+}
 function drawHeat(m){
   var g = $("heatGrid"), t = tally(m), byKey = {};
   t.forEach(function(c){ byKey[c.key] = c; });
@@ -1011,10 +1042,11 @@ function drawHeat(m){
       Array.prototype.forEach.call(g.querySelectorAll(".heat"), function(x){ x.classList.remove("pick"); });
       el.classList.add("pick"); pickKey = k;
       $("pickBox").innerHTML =
-        '<div class="cand" style="margin-top:12px"><div class="rank">직접 선택</div>'+
+        '<div class="cand" style="margin-top:12px"><div class="rank">선택한 시간</div>'+
         '<div class="when">'+whenText(m, c.d, c.h)+'</div>'+
         '<div class="why"><span class="tag'+(c.all?" all":"")+'">'+c.avail+"/"+(n||0)+' 참석 가능</span>'+
         (c.pref?'<span class="tag pf">⭐ '+c.pref+'명 선호</span>':'')+'</div>'+
+        whoRows(c, n)+
         '<button class="sec" id="pickConfirm">이 시간을 1순위로 올리기</button></div>';
       $("pickConfirm").onclick = function(){ setPick1(m, k); };
     };
