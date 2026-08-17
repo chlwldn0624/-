@@ -20,13 +20,36 @@ open index.html
 | ● 팀 공유 | Supabase | 팀원이 각자 기기에서 회의 코드로 참여 |
 | ○ 이 브라우저 | localStorage | 서버에 못 닿을 때 자동 전환 |
 
-`index.html` 상단의 `SB.url` / `SB.key` 가 채워져 있고 서버에 닿으면 팀 공유 모드로,
-그렇지 않으면 브라우저 저장 모드로 조용히 내려간다. 화면과 기능은 양쪽이 같다.
+브라우저는 시작할 때 설정을 이 순서로 찾는다.
 
-Supabase 설정은 [supabase/schema.sql](supabase/schema.sql) 을 SQL Editor에 붙여넣어 실행하면 끝난다.
-브라우저에 들어가는 키는 publishable(anon) 키뿐이고, 테이블은 RLS로 직접 접근을 막고
-`security definer` 함수만 열어두었다. 비밀번호는 브라우저에서 해시로 바꿔 보내므로
-평문이 서버에 남지 않고, 조회 응답에도 해시가 포함되지 않는다.
+1. `window.V3_CONFIG = {url, key}` — 로컬에서 잠깐 시험할 때 쓰는 탈출구
+2. `GET /api/config` — Vercel 환경변수에서 읽어 내려주는 값
+3. 둘 다 없거나 서버에 닿지 못하면 브라우저 저장 모드
+
+즉 `index.html` 에는 프로젝트 주소도 키도 들어 있지 않다. GitHub Pages나 파일을 직접 열면
+`/api/config` 가 없으니 브라우저 저장 모드로 돈다. 화면과 기능은 양쪽이 같다.
+
+## 배포 (Vercel)
+
+1. https://vercel.com 에서 이 저장소를 Import
+2. **Settings → Environment Variables** 에 두 개를 추가 (Production·Preview·Development 모두 체크)
+   - `SUPABASE_URL` — 예: `https://xxxxxxxx.supabase.co`
+   - `SUPABASE_ANON_KEY` — publishable(anon) 키
+3. Deploy. 환경변수를 나중에 바꾸면 재배포해야 반영된다.
+
+[api/config.js](api/config.js) 가 이 값을 읽어 브라우저에 내려준다. 정적 HTML은 환경변수를
+런타임에 직접 읽을 수 없어 이 함수 한 개를 둔다.
+
+## Supabase
+
+[supabase/schema.sql](supabase/schema.sql) 을 SQL Editor에 붙여넣어 실행하면 끝난다.
+테이블은 RLS로 직접 접근을 막고 `security definer` 함수만 anon에 열어두었다.
+비밀번호는 브라우저에서 해시로 바꿔 보내므로 평문이 서버에 남지 않고, 조회 응답에도
+해시가 포함되지 않는다.
+
+publishable(anon) 키는 원래 브라우저에 노출되는 값이다. 환경변수로 옮긴 목적은 키를
+비밀로 만드는 것이 아니라 저장소에서 떼어내 프로젝트 교체·키 교체 때 코드를 고치지 않게
+하는 것이다. 실제 데이터 보호는 RLS와 함수 권한이 담당한다.
 
 ## 화면 흐름
 

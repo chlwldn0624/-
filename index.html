@@ -72,7 +72,8 @@ body{
 .choices{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:26px}
 @media (max-width:520px){.choices{grid-template-columns:1fr}}
 .choice{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 20px;text-align:left;cursor:pointer;font-family:inherit;color:inherit;box-shadow:var(--shadow);transition:transform .12s ease,border-color .12s ease}
-.choice:hover{transform:translateY(-2px);border-color:var(--brand)}
+.choice:hover:not(:disabled){transform:translateY(-2px);border-color:var(--brand)}
+.choice:disabled{opacity:.5;cursor:progress}
 .choice .ic{font-size:22px;display:block;margin-bottom:10px}
 .choice b{display:block;font-size:15.5px;margin-bottom:4px;letter-spacing:-.01em}
 .choice span.d{font-size:12.5px;color:var(--muted);display:block}
@@ -504,13 +505,33 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
 "use strict";
 
 /* ---------- Supabase 설정 ----------
-   두 값이 채워져 있으면 서버 모드(여러 기기에서 같은 회의를 공유)로 돌고,
-   비어 있거나 서버에 닿지 못하면 브라우저 저장 모드로 자동 전환된다. */
-var SB = {
-  url: "https://czhckeygbjkotecfegbn.supabase.co",
-  key: "sb_publishable_2qJuZxCb9lHdk873R7BH9w_gDQ3p4v2"
-};
+   값은 코드에 두지 않고 배포 환경에서 받아온다.
+     1) window.V3_CONFIG 가 있으면 그것을 쓴다 (로컬에서 시험할 때)
+     2) 없으면 /api/config 를 호출한다 (Vercel 환경변수)
+     3) 둘 다 없거나 서버에 닿지 못하면 브라우저 저장 모드로 내려간다 */
+var SB = {url:"", key:""};
 var online = false;   // 서버 모드로 확정되면 true
+
+function normUrl(u){
+  return String(u || "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
+}
+function loadConfig(){
+  var c = window.V3_CONFIG;
+  if(c && c.url && c.key){
+    SB = {url:normUrl(c.url), key:String(c.key).trim()};
+    return Promise.resolve(true);
+  }
+  return fetch("/api/config", {cache:"no-store"})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if(d && d.url && d.key){
+        SB = {url:normUrl(d.url), key:String(d.key).trim()};
+        return true;
+      }
+      return false;
+    })
+    .catch(function(){ return false; });
+}
 
 function rpc(fn, args){
   return fetch(SB.url + "/rest/v1/rpc/" + fn, {
@@ -1554,8 +1575,14 @@ $("resHome").onclick = function(){ renderHome(); show("home"); };
 /* ---------- 시작 ----------
    서버에 한 번 찔러보고 모드를 정한다. 아티팩트 뷰어처럼 외부 통신이 막힌 곳에서는
    이 요청이 실패하고 브라우저 저장 모드로 조용히 내려간다. */
+function setChecking(){
+  var b = $("modeBadge");
+  b.className = "mode off"; b.textContent = "연결 확인 중…";
+  $("goCreate").disabled = true; $("goJoin").disabled = true;
+}
 function applyMode(isOnline){
   online = isOnline;
+  $("goCreate").disabled = false; $("goJoin").disabled = false;
   var b = $("modeBadge");
   b.className = "mode " + (online ? "on" : "off");
   b.textContent = online ? "● 팀 공유" : "○ 이 브라우저";
@@ -1572,11 +1599,15 @@ function applyMode(isOnline){
   renderHome();
 }
 function boot(){
-  if(!SB.url || !SB.key){ applyMode(false); return; }
-  var timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error("timeout")); }, 6000); });
-  Promise.race([rpc("get_meeting", {p_code:"______"}), timeout])
-    .then(function(){ applyMode(true); })
-    .catch(function(){ applyMode(false); });
+  setChecking();               // 모드가 정해지기 전에 회의를 만들지 못하게 잠근다
+  renderHome();
+  loadConfig().then(function(hasConfig){
+    if(!hasConfig){ applyMode(false); return; }
+    var timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error("timeout")); }, 6000); });
+    return Promise.race([rpc("get_meeting", {p_code:"______"}), timeout])
+      .then(function(){ applyMode(true); })
+      .catch(function(){ applyMode(false); });
+  }).catch(function(){ applyMode(false); });
 }
 log("home_view", "", "", "");
 boot();
