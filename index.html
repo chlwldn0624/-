@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="팀장이 날짜와 시간 범위를 정하면 회의 코드가 발급되고, 팀원은 코드를 입력해 불가능·가능·선호 시간을 표시합니다. 선호도를 반영해 최적 회의시간 1·2·3순위를 자동으로 추천합니다.">
+<title>팀플 회의시간 자동합의 — 시간표 맞추기와 최적 시간 추천</title>
+<link rel="canonical" href="https://kappa-six-89.vercel.app/">
+<meta name="description" content="팀플 시간표 맞추기 서비스. 팀장이 날짜와 시간 범위를 정하면 회의 코드가 발급되고, 팀원은 코드를 입력해 불가능·가능·선호 시간을 표시합니다. 선호도를 반영해 최적 회의시간 1·2·3순위를 자동으로 추천합니다. 회원가입 없이 무료.">
 
 <!-- 카카오톡 등으로 링크를 공유할 때 보이는 미리보기 -->
 <meta property="og:type" content="website">
@@ -26,8 +28,45 @@
        /[?&]ga_debug=1/.test(location.search) ? {debug_mode: true} : {});
 </script>
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "팀플 회의시간 자동합의",
+      "url": "https://kappa-six-89.vercel.app/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "웹 브라우저",
+      "inLanguage": "ko",
+      "description": "팀원의 불가능·가능·선호 시간을 모아 최적 회의시간 1·2·3순위를 자동으로 추천하는 팀플 시간표 맞추기 서비스.",
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "KRW"},
+      "featureList": [
+        "회의 코드 발급",
+        "불가능·가능·선호 3단계 시간 표시",
+        "참석 인원과 선호도 기반 최적 시간 자동 추천",
+        "확정 회의시간 1·2·3순위 지정",
+        "회원가입 불필요"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type":"Question","name":"회원가입이 필요한가요?",
+         "acceptedAnswer":{"@type":"Answer","text":"필요 없습니다. 회의 코드와 이름만 있으면 참여할 수 있습니다."}},
+        {"@type":"Question","name":"가능시간만 고르는 방식과 무엇이 다른가요?",
+         "acceptedAnswer":{"@type":"Answer","text":"가능 여부만 모으면 모두 되는 시간이 여러 개일 때 다시 논의해야 합니다. 선호를 함께 받아 그중 어느 시간이 더 나은지까지 계산해 1순위를 제시합니다."}},
+        {"@type":"Question","name":"제출한 시간을 나중에 고칠 수 있나요?",
+         "acceptedAnswer":{"@type":"Answer","text":"같은 이름으로 다시 들어오면 이전에 표시한 시간표를 불러와 수정할 수 있습니다. 개인 비밀번호를 정해두면 본인만 고칠 수 있습니다."}},
+        {"@type":"Question","name":"팀원이 각자 휴대폰으로 입력해도 되나요?",
+         "acceptedAnswer":{"@type":"Answer","text":"됩니다. 같은 회의 코드를 입력하면 여러 기기에서 들어온 응답이 하나로 모입니다."}}
+      ]
+    }
+  ]
+}
+</script>
+
 <!--ARTIFACT-START-->
-<title>회의시간 자동합의 V3</title>
 <style>
 :root{
   --bg:#f6f7fb; --surface:#ffffff; --surface-2:#f1f2f7; --line:#e2e4ee;
@@ -223,6 +262,17 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
 .backup .bw{font-weight:700}
 .backup .bm{font-size:11.5px;color:var(--muted);margin-left:auto;flex:0 0 auto}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;word-break:break-all;background:var(--surface-2);border-radius:8px;padding:9px 10px;color:var(--muted);margin-top:8px}
+/* 홈 하단 설명 — 검색엔진이 읽을 본문이자 처음 온 사람을 위한 안내 */
+.about{margin-top:34px;padding-top:26px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;line-height:1.75}
+.about h2{font-size:16px;color:var(--text);margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.about h3{font-size:13.5px;color:var(--text);margin:24px 0 8px}
+.about p{margin:0}
+.about b{color:var(--text);font-weight:600}
+.about ol{margin:0;padding-left:20px}
+.about ol li{margin-bottom:5px}
+.about .faq{margin:0}
+.about .faq dt{color:var(--text);font-weight:600;margin-top:12px}
+.about .faq dd{margin:2px 0 0}
 .mylist{margin-top:22px}
 .mylist h3{font-size:12.5px;color:var(--muted);font-weight:600;margin:0 0 8px;padding-left:2px}
 .mrow{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:7px;cursor:pointer}
@@ -271,6 +321,37 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
     </div>
     <div class="mylist" id="myList"></div>
     <button class="link" id="goLeader" style="display:none">다른 기기에서 팀장 화면 열기</button>
+
+    <section class="about">
+      <h2>팀플 시간표 맞추기, 코드 하나로 끝냅니다</h2>
+      <p>4~6인 팀 프로젝트에서 회의시간을 정할 때 오래 걸리는 일은 가능한 시간을 모으는 것이 아니라,
+      모은 뒤에 최종 시간을 고르는 일입니다. 모두가 되는 시간이 여러 개 나오면 단톡방에서 다시 논의하게 되고
+      확정까지 하루가 넘어가기도 합니다. 이 서비스는 팀원의 <b>불가능·가능·선호</b> 세 가지 표시를 모아
+      참석 인원과 선호도를 함께 계산하고, 가장 나은 회의시간 1·2·3순위를 자동으로 추천합니다.</p>
+
+      <h3>이렇게 씁니다</h3>
+      <ol>
+        <li><b>팀장</b>이 조율할 날짜와 시간 범위(0~24시)를 고르면 6자리 회의 코드가 발급됩니다.</li>
+        <li><b>팀원</b>은 코드를 입력하고, 안 되는 시간만 빼고 특히 좋은 시간에 선호를 표시합니다.</li>
+        <li>참석 가능 인원 → 선호 수 → 이른 시간 순으로 <b>최적 회의시간</b>이 자동 정렬됩니다.</li>
+        <li>팀장이 1순위와 예비 2·3순위를 확정하면 팀원 화면에도 확정 시간이 나타납니다.</li>
+      </ol>
+
+      <h3>자주 묻는 질문</h3>
+      <dl class="faq">
+        <dt>회원가입이 필요한가요?</dt>
+        <dd>필요 없습니다. 회의 코드와 이름만 있으면 참여할 수 있습니다.</dd>
+        <dt>가능시간만 고르는 방식과 무엇이 다른가요?</dt>
+        <dd>가능 여부만 모으면 모두 되는 시간이 여러 개일 때 다시 논의해야 합니다.
+        선호를 함께 받아 그중 어느 시간이 더 나은지까지 계산해 1순위를 제시합니다.</dd>
+        <dt>제출한 시간을 나중에 고칠 수 있나요?</dt>
+        <dd>같은 이름으로 다시 들어오면 이전에 표시한 시간표를 불러와 수정할 수 있습니다.
+        개인 비밀번호를 정해두면 본인만 고칠 수 있습니다.</dd>
+        <dt>팀원이 각자 휴대폰으로 입력해도 되나요?</dt>
+        <dd>됩니다. 같은 회의 코드를 입력하면 여러 기기에서 들어온 응답이 하나로 모입니다.</dd>
+      </dl>
+    </section>
+
     <p class="foot">V1 가능시간 선택형 → V2 불가능시간 제외형 → <b>V3 선호도 기반 최적시간 자동추천</b></p>
   </section>
 
