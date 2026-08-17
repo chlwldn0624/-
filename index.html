@@ -53,6 +53,9 @@ body{
 .appbar h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
 .appbar p{margin:0;font-size:12.5px;color:var(--muted)}
 .spacer{flex:1}
+.mode{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.mode.on{background:var(--ok-soft);color:var(--ok)}
+.mode.off{background:var(--surface-2);color:var(--muted)}
 .ghost-btn{background:none;border:1px solid var(--line);color:var(--muted);border-radius:9px;padding:6px 10px;font-size:12.5px;cursor:pointer;font-family:inherit}
 .ghost-btn:hover{color:var(--text);border-color:var(--faint)}
 
@@ -219,6 +222,7 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
       <p>선호도 기반 최적시간 자동추천</p>
     </div>
     <div class="spacer"></div>
+    <span class="mode" id="modeBadge" title="저장 위치"></span>
     <button class="ghost-btn" id="homeBtn">처음으로</button>
   </div>
 
@@ -242,6 +246,7 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
       </button>
     </div>
     <div class="mylist" id="myList"></div>
+    <button class="link" id="goLeader" style="display:none">다른 기기에서 팀장 화면 열기</button>
     <p class="foot">V1 가능시간 선택형 → V2 불가능시간 제외형 → <b>V3 선호도 기반 최적시간 자동추천</b></p>
   </section>
 
@@ -317,6 +322,10 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
     <div class="card">
       <h2>팀장 확인</h2>
       <p class="sub" id="leadSub"></p>
+      <div class="field" id="leadCodeField">
+        <label class="f" for="leadCode">회의 코드</label>
+        <input type="text" id="leadCode" placeholder="6자리 회의 코드" maxlength="6" autocomplete="off">
+      </div>
       <div class="field">
         <label class="f" for="leadPin">팀장 비밀번호</label>
         <input type="password" id="leadPin" placeholder="회의를 만들 때 정한 비밀번호" maxlength="20" autocomplete="off">
@@ -405,8 +414,9 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
       <div class="people" id="people"></div>
       <div class="split" style="margin-top:14px">
         <button class="sec" id="dashShare">코드 공유</button>
-        <button class="sec" id="dashPaste">응답 코드 입력</button>
+        <button class="sec" id="dashRefresh">응답 새로고침</button>
       </div>
+      <button class="sec" id="dashPaste" style="margin-top:9px">응답 코드 입력</button>
     </div>
 
     <div class="card" id="recCard">
@@ -493,8 +503,28 @@ dl.info dd{margin:0;color:var(--text);font-weight:600}
 (function(){
 "use strict";
 
-/* ---------- 저장소 ---------- */
-var K = {M:"v3_meetings", O:"v3_owned", L:"v3_logs", N:"v3_name"};
+/* ---------- Supabase 설정 ----------
+   두 값이 채워져 있으면 서버 모드(여러 기기에서 같은 회의를 공유)로 돌고,
+   비어 있거나 서버에 닿지 못하면 브라우저 저장 모드로 자동 전환된다. */
+var SB = {
+  url: "https://czhckeygbjkotecfegbn.supabase.co",
+  key: "sb_publishable_2qJuZxCb9lHdk873R7BH9w_gDQ3p4v2"
+};
+var online = false;   // 서버 모드로 확정되면 true
+
+function rpc(fn, args){
+  return fetch(SB.url + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: {"apikey": SB.key, "Content-Type": "application/json"},
+    body: JSON.stringify(args || {})
+  }).then(function(res){
+    if(!res.ok) return res.text().then(function(t){ throw new Error(fn + " " + res.status + " " + t); });
+    return res.json();
+  });
+}
+
+/* ---------- 로컬 저장소 ---------- */
+var K = {M:"v3_meetings", O:"v3_owned", OM:"v3_owned_meta", L:"v3_logs", N:"v3_name"};
 var mem = {};
 function load(k, d){
   try{ var v = localStorage.getItem(k); if(v !== null) return JSON.parse(v); }catch(e){}
@@ -507,14 +537,39 @@ function save(k, v){
 }
 function meetings(){ return load(K.M, {}); }
 function putMeeting(m){ var all = meetings(); all[m.code] = m; save(K.M, all); }
-function getMeeting(c){ return meetings()[c] || null; }
 
-/* ---------- 행동로그 ---------- */
+/* 화면에 그려지고 있는 회의. 서버 모드에서는 요청 결과를 여기 담아 쓴다. */
+var current = null;
+function getMeeting(c){
+  if(online) return (current && current.code === c) ? current : null;
+  return meetings()[c] || null;
+}
+
+/* 내가 만든 회의 목록은 기기별 정보라 항상 로컬에 둔다. */
+function ownedCodes(){ return load(K.O, []); }
+function rememberOwned(m){
+  var owned = ownedCodes();
+  if(owned.indexOf(m.code) < 0){ owned.push(m.code); save(K.O, owned); }
+  var meta = load(K.OM, {});
+  meta[m.code] = {title:m.title, dates:m.dates.length, hStart:m.hStart, hEnd:m.hEnd, leaderLocked:!!m.leaderPin || !!m.leaderLocked};
+  save(K.OM, meta);
+}
+function forgetOwned(code){
+  save(K.O, ownedCodes().filter(function(c){ return c !== code; }));
+  var meta = load(K.OM, {}); delete meta[code]; save(K.OM, meta);
+}
+
+/* ---------- 행동로그 ----------
+   서버 모드에서는 events 테이블에도 남겨 모든 팀원 기기의 로그가 한곳에 모인다. */
 function log(ev, code, actor, meta){
   var arr = load(K.L, []);
   arr.push({ts:Date.now(), iso:new Date().toISOString(), event:ev, code:code||"", actor:actor||"", meta:meta==null?"":String(meta)});
   if(arr.length > 3000) arr = arr.slice(-3000);
   save(K.L, arr);
+  if(online && code){
+    rpc("log_event", {p_code:code, p_event:ev, p_actor:actor||"", p_meta:meta==null?"":String(meta)})
+      .catch(function(){});   // 로그 실패가 흐름을 막지 않게 한다
+  }
 }
 
 /* ---------- 유틸 ---------- */
@@ -576,10 +631,10 @@ function josa(word, withJong, withoutJong){
   var hasJong = (c >= 0xAC00 && c <= 0xD7A3) ? ((c - 0xAC00) % 28 !== 0) : true;
   return hasJong ? withJong : withoutJong;
 }
-/* 개인 비밀번호는 평문으로 두지 않도록 회의 코드를 섞어 해시로만 보관한다.
+/* 비밀번호는 브라우저에서 해시로 바꿔 보관·전송한다. 평문은 기기를 떠나지 않는다.
    팀원끼리 실수로 서로의 응답을 덮어쓰지 않게 막는 잠금이며, 암호학적 보안은 아니다. */
-function hashPin(code, pin){
-  var s = code + "|" + pin, h1 = 5381, h2 = 52711, i;
+function hashPin(pin){
+  var s = "v3|" + pin, h1 = 5381, h2 = 52711, i;
   for(i=0;i<s.length;i++){
     var c = s.charCodeAt(i);
     h1 = ((h1 << 5) + h1 + c) >>> 0;
@@ -597,6 +652,116 @@ function newCode(){
   return c;
 }
 
+/* ---------- 저장 계층 ----------
+   화면 코드는 아래 store 함수만 쓴다. 서버 모드와 로컬 모드가 같은 모양의
+   회의 객체를 돌려주므로 렌더링 코드는 양쪽에서 그대로 동작한다. */
+var store = {
+  create: function(meta){
+    if(online){
+      return rpc("create_meeting", {
+        p_title: meta.title, p_team_size: meta.size, p_dates: meta.dates,
+        p_h_start: meta.hStart, p_h_end: meta.hEnd, p_leader_pin: meta.leaderPin || ""
+      });
+    }
+    var m = {
+      code:newCode(), title:meta.title, size:meta.size, dates:meta.dates,
+      hStart:meta.hStart, hEnd:meta.hEnd, createdAt:Date.now(),
+      responses:[], confirmed:null, leaderPin:meta.leaderPin || null
+    };
+    putMeeting(m);
+    return Promise.resolve(m.code);
+  },
+  /* opts: {name, pin, leaderPin} — 서버는 권한에 따라 보여줄 범위를 스스로 정한다 */
+  get: function(code, opts){
+    opts = opts || {};
+    if(online){
+      return rpc("get_meeting", {
+        p_code: code, p_name: opts.name || null,
+        p_pin: opts.pin || null, p_leader_pin: opts.leaderPin || null
+      }).then(function(d){
+        if(!d || !d.ok) return null;
+        var m = {
+          code:d.code, title:d.title, size:d.size, dates:d.dates,
+          hStart:d.hStart, hEnd:d.hEnd, createdAt:new Date(d.createdAt).getTime(),
+          confirmed:d.confirmed, leaderLocked:d.leaderLocked, isLeader:d.isLeader,
+          people:d.people || []
+        };
+        if(d.responses) m.responses = d.responses.map(function(r){
+          return {name:r.name, slots:r.slots, pin:r.locked ? "1" : null};
+        });
+        else if(d.myResponse) m.responses = [{name:d.myResponse.name, slots:d.myResponse.slots, pin:d.myResponse.locked ? "1" : null}];
+        else m.responses = [];
+        current = m;
+        return m;
+      });
+    }
+    return Promise.resolve(meetings()[code] || null);
+  },
+  checkName: function(code, name, pinHash){
+    if(online) return rpc("check_response_pin", {p_code:code, p_name:name, p_pin:pinHash || ""});
+    var m = meetings()[code];
+    if(!m) return Promise.resolve("no_meeting");
+    var prev = m.responses.filter(function(r){ return r.name === name; })[0];
+    if(!prev) return Promise.resolve("new");
+    if(!prev.pin) return Promise.resolve("open");
+    if(!pinHash) return Promise.resolve("pin_required");
+    return Promise.resolve(pinHash === prev.pin ? "ok" : "pin_fail");
+  },
+  putResponse: function(code, name, pinHash, slotMap){
+    if(online) return rpc("upsert_response", {p_code:code, p_name:name, p_pin:pinHash || "", p_slots:slotMap});
+    var m = meetings()[code]; if(!m) return Promise.resolve("no_meeting");
+    var prev = m.responses.filter(function(r){ return r.name === name; })[0];
+    if(prev && prev.pin && pinHash !== prev.pin) return Promise.resolve("pin_fail");
+    m.responses = m.responses.filter(function(r){ return r.name !== name; });
+    m.responses.push({name:name, ts:Date.now(), pin:pinHash || (prev && prev.pin) || null, slots:slotMap});
+    putMeeting(m);
+    return Promise.resolve(prev ? "updated" : "created");
+  },
+  checkLeader: function(code, leaderPinHash){
+    if(online) return rpc("check_leader", {p_code:code, p_leader_pin:leaderPinHash || ""});
+    var m = meetings()[code];
+    if(!m) return Promise.resolve("no_meeting");
+    if(!m.leaderPin) return Promise.resolve("open");
+    if(!leaderPinHash) return Promise.resolve("pin_required");
+    return Promise.resolve(leaderPinHash === m.leaderPin ? "ok" : "pin_fail");
+  },
+  setConfirmed: function(code, leaderPinHash, confirmed){
+    if(online) return rpc("set_confirmed", {p_code:code, p_leader_pin:leaderPinHash || "", p_confirmed:confirmed});
+    var m = meetings()[code]; if(!m) return Promise.resolve("no_meeting");
+    m.confirmed = confirmed; putMeeting(m);
+    return Promise.resolve("ok");
+  },
+  delResponse: function(code, leaderPinHash, name){
+    if(online) return rpc("delete_response", {p_code:code, p_leader_pin:leaderPinHash || "", p_name:name});
+    var m = meetings()[code]; if(!m) return Promise.resolve("no_meeting");
+    m.responses = m.responses.filter(function(r){ return r.name !== name; });
+    putMeeting(m);
+    return Promise.resolve("ok");
+  },
+  delMeeting: function(code, leaderPinHash){
+    if(online) return rpc("delete_meeting", {p_code:code, p_leader_pin:leaderPinHash || ""});
+    var all = meetings(); delete all[code]; save(K.M, all);
+    return Promise.resolve("ok");
+  },
+  events: function(code, leaderPinHash){
+    if(online){
+      return rpc("get_events", {p_code:code, p_leader_pin:leaderPinHash || ""}).then(function(d){
+        if(!d || !d.ok) return [];
+        return d.rows.map(function(r){
+          return {ts:new Date(r.iso).getTime(), iso:r.iso, event:r.event, code:code, actor:r.actor, meta:r.meta};
+        });
+      });
+    }
+    return Promise.resolve(load(K.L, []));
+  }
+};
+
+/* 요청 실패를 사용자에게 알린다 */
+function fail(e){
+  toast("서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  if(window.console && console.warn) console.warn(e);
+}
+
 /* ---------- 화면 전환 ---------- */
 var cur = "home";
 function show(name){
@@ -609,17 +774,32 @@ function show(name){
 
 /* ---------- 홈 ---------- */
 function renderHome(){
-  var owned = load(K.O, []), all = meetings(), box = $("myList"), html = "";
-  var valid = owned.filter(function(c){ return all[c]; });
-  if(valid.length !== owned.length) save(K.O, valid);
-  if(valid.length){
-    html = '<h3>내가 만든 회의</h3>';
-    valid.slice().reverse().forEach(function(c){
-      var m = all[c];
-      var pk = picksOf(m);
-      var st = pk ? "확정 "+whenText(m, pk[0].d, pk[0].h) : (m.responses.length + "명 응답");
-      html += '<div class="mrow" data-code="'+c+'"><div><b>'+esc(m.title)+(m.leaderPin?' 🔒':'')+'</b><span>'+m.dates.length+'일 · '+hLabel(m.hStart)+'–'+(m.hEnd===24?"24:00":hLabel(m.hEnd))+' · '+st+'</span></div><div class="mc">'+c+'</div></div>';
-    });
+  var owned = ownedCodes(), box = $("myList"), html = "";
+  if(online){
+    // 서버 모드에서는 목록을 로컬 요약으로 그린다 (기기별 정보)
+    var meta = load(K.OM, {});
+    var valid = owned.filter(function(c){ return meta[c]; });
+    if(valid.length){
+      html = '<h3>내가 만든 회의</h3>';
+      valid.slice().reverse().forEach(function(c){
+        var t = meta[c];
+        html += '<div class="mrow" data-code="'+c+'"><div><b>'+esc(t.title)+(t.leaderLocked?' 🔒':'')+
+          '</b><span>'+t.dates+'일 · '+hLabel(t.hStart)+'–'+(t.hEnd===24?"24:00":hLabel(t.hEnd))+'</span></div><div class="mc">'+c+'</div></div>';
+      });
+    }
+  } else {
+    var all = meetings();
+    var v2 = owned.filter(function(c){ return all[c]; });
+    if(v2.length !== owned.length) save(K.O, v2);
+    if(v2.length){
+      html = '<h3>내가 만든 회의</h3>';
+      v2.slice().reverse().forEach(function(c){
+        var m = all[c];
+        var pk = picksOf(m);
+        var st = pk ? "확정 "+whenText(m, pk[0].d, pk[0].h) : (m.responses.length + "명 응답");
+        html += '<div class="mrow" data-code="'+c+'"><div><b>'+esc(m.title)+(m.leaderPin?' 🔒':'')+'</b><span>'+m.dates.length+'일 · '+hLabel(m.hStart)+'–'+(m.hEnd===24?"24:00":hLabel(m.hEnd))+' · '+st+'</span></div><div class="mc">'+c+'</div></div>';
+      });
+    }
   }
   box.innerHTML = html;
   Array.prototype.forEach.call(box.querySelectorAll(".mrow"), function(r){
@@ -680,26 +860,29 @@ function createMeeting(){
   var hs = parseInt($("hStart").value,10), he = parseInt($("hEnd").value,10);
   if(!picked.length){ err.textContent = "날짜를 최소 1일 선택해주세요."; return; }
   if(he <= hs){ err.textContent = "종료 시간은 시작 시간보다 뒤여야 합니다."; return; }
-  var code = newCode();
   var lead = $("mLeadPin").value;
-  var m = {
-    code:code, title:title, size:size, dates:picked.slice(),
-    hStart:hs, hEnd:he, createdAt:Date.now(), responses:[], confirmed:null,
-    leaderPin: lead ? hashPin(code, lead) : null
-  };
-  putMeeting(m);
-  var owned = load(K.O, []); owned.push(m.code); save(K.O, owned);
-  authed[m.code] = true;
-  log("schedule_create", m.code, "leader", m.dates.length+"일/"+hs+"-"+he+"시/"+slots(m).length+"슬롯"+(m.leaderPin?"/팀장잠금":""));
-  activeCode = m.code;
-  $("mLeadPin").value = "";
-  $("newCode").textContent = m.code;
-  $("createdInfo").innerHTML =
-    "<b>"+esc(m.title)+"</b><br>"+
-    m.dates.map(function(s){ return dLabel(s)+"("+dowLabel(s)+")"; }).join(", ")+
-    " · "+hLabel(hs)+"–"+(he===24?"24:00":hLabel(he))+" · 1시간 단위 "+slots(m).length+"개 슬롯"+
-    (m.leaderPin ? "<br>🔒 팀장 화면은 팀장 비밀번호를 입력해야 열립니다." : "");
-  show("created");
+  var leadHash = lead ? hashPin(lead) : null;
+  var meta = {title:title, size:size, dates:picked.slice(), hStart:hs, hEnd:he, leaderPin:leadHash};
+  var nSlots = meta.dates.length * (he - hs);
+  var btn = $("createBtn");
+  btn.disabled = true; btn.textContent = "만들고 있어요…";
+
+  store.create(meta).then(function(code){
+    authed[code] = leadHash || "";
+    activeCode = code;
+    rememberOwned({code:code, title:title, dates:meta.dates, hStart:hs, hEnd:he, leaderLocked:!!leadHash});
+    log("schedule_create", code, "leader", meta.dates.length+"일/"+hs+"-"+he+"시/"+nSlots+"슬롯"+(leadHash?"/팀장잠금":""));
+    $("mLeadPin").value = "";
+    $("newCode").textContent = code;
+    $("createdInfo").innerHTML =
+      "<b>"+esc(title)+"</b><br>"+
+      meta.dates.map(function(s){ return dLabel(s)+"("+dowLabel(s)+")"; }).join(", ")+
+      " · "+hLabel(hs)+"–"+(he===24?"24:00":hLabel(he))+" · 1시간 단위 "+nSlots+"개 슬롯"+
+      (leadHash ? "<br>🔒 팀장 화면은 팀장 비밀번호를 입력해야 열립니다." : "");
+    show("created");
+  }).catch(fail).then(function(){
+    btn.disabled = false; btn.textContent = "회의 생성하고 코드 발급받기";
+  });
 }
 
 /* ---------- 참여 ---------- */
@@ -715,33 +898,41 @@ function doJoin(){
   var name = $("joinName").value.trim();
   var pin = $("joinPin").value;
   if(code.length !== 6){ err.textContent = "6자리 회의 코드를 입력해주세요."; return; }
-  var m = getMeeting(code);
-  if(!m){ err.textContent = "그런 회의 코드를 찾을 수 없습니다. 코드를 다시 확인해주세요."; return; }
   if(!name){ err.textContent = "이름을 입력해주세요."; return; }
+  var pinHash = pin ? hashPin(pin) : null;
+  var btn = $("joinBtn");
+  btn.disabled = true; btn.textContent = "불러오는 중…";
 
-  var prev = findResp(m, name);
-
-  // 잠긴 이름이면 비밀번호가 맞아야 열 수 있다.
-  if(prev && prev.pin){
-    if(!pin){
+  store.checkName(code, name, pinHash).then(function(st){
+    if(st === "no_meeting"){
+      err.textContent = "그런 회의 코드를 찾을 수 없습니다. 코드를 다시 확인해주세요.";
+      return null;
+    }
+    if(st === "pin_required"){
       err.textContent = "“"+name+"”"+josa(name,"은","는")+" 개인 비밀번호로 잠겨 있습니다. 비밀번호를 입력하거나 다른 이름을 쓰세요.";
       log("pin_required", code, name, "");
-      return;
+      return null;
     }
-    if(hashPin(code, pin) !== prev.pin){
+    if(st === "pin_fail"){
       err.textContent = "비밀번호가 일치하지 않습니다. 잊었다면 팀장에게 응답 삭제를 요청하세요.";
       log("pin_fail", code, name, "");
-      return;
+      return null;
     }
-  }
-
-  activeCode = code; myName = name; save(K.N, name);
-  myPin = prev && prev.pin ? prev.pin : (pin ? hashPin(code, pin) : null);
-  $("joinPin").value = "";
-  log("member_open", code, name, prev ? "returning" : "new");
-  if(picksOf(m)){ resultFromJoin = true; renderResult(m); show("result"); return; }
-  resultFromJoin = false;
-  startRespond(m, name);
+    // st: new | open | ok
+    return store.get(code, {name:name, pin:pinHash, leaderPin:authed[code]}).then(function(m){
+      if(!m){ err.textContent = "그런 회의 코드를 찾을 수 없습니다. 코드를 다시 확인해주세요."; return; }
+      activeCode = code; myName = name; save(K.N, name);
+      var prev = findResp(m, name);
+      myPin = (prev && prev.pin) ? (pinHash || prev.pin) : pinHash;
+      $("joinPin").value = "";
+      log("member_open", code, name, (st === "new") ? "new" : "returning");
+      if(picksOf(m)){ resultFromJoin = true; renderResult(m); show("result"); return; }
+      resultFromJoin = false;
+      startRespond(m, name);
+    });
+  }).catch(fail).then(function(){
+    btn.disabled = false; btn.textContent = "시간 입력하러 가기";
+  });
 }
 function startRespond(m, name){
   myState = {};
@@ -815,21 +1006,32 @@ window.addEventListener("pointerup", function(){ painting = false; });
 function submitResp(){
   var m = getMeeting(activeCode); if(!m) return;
   var prev = findResp(m, myName);
-  var rec = {name:myName, ts:Date.now(), pin:myPin || null, slots:{}};
-  Object.keys(myState).forEach(function(k){ rec.slots[k] = myState[k]; });
-  m.responses = m.responses.filter(function(r){ return r.name !== myName; });
-  m.responses.push(rec);
-  putMeeting(m);
-  var secs = Math.round((Date.now() - openTime)/1000);
-  log(prev ? "member_revise" : "member_submit", m.code, myName, "입력"+secs+"초/조작"+paintCount+"회"+(rec.pin?"/잠금":""));
-  var nNo = 0, nPref = 0;
-  Object.keys(rec.slots).forEach(function(k){ if(rec.slots[k]==="no") nNo++; else if(rec.slots[k]==="prefer") nPref++; });
-  $("doneSub").innerHTML = esc(myName)+"님의 응답이 "+(prev?"수정":"저장")+"되었습니다. 불가능 "+nNo+"칸, ⭐선호 "+nPref+"칸.";
-  $("doneEditHint").innerHTML = rec.pin
-    ? "🔒 <b>"+esc(myName)+"</b> 이름이 개인 비밀번호로 잠겼습니다. 다음에 같은 이름과 비밀번호로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요."
-    : "다음에 <b>"+esc(myName)+"</b> 이름으로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요. 팀원과 이름이 겹칠 것 같으면 개인 비밀번호를 정해두세요.";
-  $("respCode").textContent = encodeResp(m, rec);
-  show("done");
+  var slotMap = {};
+  Object.keys(myState).forEach(function(k){ slotMap[k] = myState[k]; });
+  var btn = $("submitResp"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "저장 중…";
+
+  store.putResponse(m.code, myName, myPin, slotMap).then(function(st){
+    if(st === "pin_fail"){ toast("비밀번호가 맞지 않아 저장하지 못했습니다"); return; }
+    if(st === "no_meeting"){ toast("회의를 찾을 수 없습니다"); return; }
+    var secs = Math.round((Date.now() - openTime)/1000);
+    var updated = (st === "updated") || !!prev;
+    log(updated ? "member_revise" : "member_submit", m.code, myName,
+        "입력"+secs+"초/조작"+paintCount+"회"+(myPin?"/잠금":""));
+    // 로컬 캐시도 최신으로 맞춰 뒤 화면이 어긋나지 않게 한다.
+    m.responses = m.responses.filter(function(r){ return r.name !== myName; });
+    m.responses.push({name:myName, ts:Date.now(), pin:myPin || null, slots:slotMap});
+    var nNo = 0, nPref = 0;
+    Object.keys(slotMap).forEach(function(k){ if(slotMap[k]==="no") nNo++; else if(slotMap[k]==="prefer") nPref++; });
+    $("doneSub").innerHTML = esc(myName)+"님의 응답이 "+(updated?"수정":"저장")+"되었습니다. 불가능 "+nNo+"칸, ⭐선호 "+nPref+"칸.";
+    $("doneEditHint").innerHTML = myPin
+      ? "🔒 <b>"+esc(myName)+"</b> 이름이 개인 비밀번호로 잠겼습니다. 다음에 같은 이름과 비밀번호로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요."
+      : "다음에 <b>"+esc(myName)+"</b> 이름으로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요. 팀원과 이름이 겹칠 것 같으면 개인 비밀번호를 정해두세요.";
+    $("respCode").textContent = encodeResp(m, {name:myName, pin:myPin, slots:slotMap});
+    show("done");
+  }).catch(fail).then(function(){
+    btn.disabled = false; btn.textContent = label;
+  });
 }
 function encodeResp(m, r){
   var str = slots(m).map(function(s){
@@ -879,32 +1081,60 @@ function rank(m){
 /* ---------- 대시보드 ---------- */
 var authed = {};   // 이 세션에서 팀장 확인을 통과한 회의 (저장하지 않음)
 
-function isOwner(code){ return load(K.O, []).indexOf(code) >= 0; }
+function isOwner(code){ return ownedCodes().indexOf(code) >= 0; }
 function openDash(code){
-  var m = getMeeting(code); if(!m){ toast("회의를 찾을 수 없습니다"); return; }
   activeCode = code;
-  if(m.leaderPin && !authed[code]){
-    $("leadSub").innerHTML = "<b>"+esc(m.title)+"</b> · 회의 코드 "+m.code;
-    $("leadPin").value = ""; $("leadErr").textContent = "";
-    log("leader_gate", code, "leader", "");
-    show("lead"); setTimeout(function(){ $("leadPin").focus(); }, 60);
-    return;
-  }
-  renderDash(m);
-  log("recommend_view", code, "leader", "응답"+m.responses.length+"명");
-  show("dash");
+  store.checkLeader(code, authed[code]).then(function(st){
+    if(st === "no_meeting"){ toast("회의를 찾을 수 없습니다"); forgetOwned(code); renderHome(); show("home"); return; }
+    if(st === "pin_required" || st === "pin_fail"){
+      var meta = load(K.OM, {})[code] || {};
+      showLeadGate(code, meta.title);
+      return;
+    }
+    if(authed[code] === undefined) authed[code] = "";
+    return refreshDash(code);
+  }).catch(fail);
+}
+/* 서버에서 최신 상태를 받아 팀장 화면을 다시 그린다 */
+function refreshDash(code){
+  return store.get(code, {leaderPin: authed[code]}).then(function(m){
+    if(!m){ toast("회의를 찾을 수 없습니다"); return; }
+    rememberOwned({code:m.code, title:m.title, dates:m.dates, hStart:m.hStart, hEnd:m.hEnd, leaderLocked:m.leaderLocked || !!m.leaderPin});
+    renderDash(m);
+    log("recommend_view", code, "leader", "응답"+m.responses.length+"명");
+    show("dash");
+  });
+}
+/* 팀장 확인 화면. code가 있으면 그 회의로 고정, 없으면 코드부터 입력받는다. */
+function showLeadGate(code, title){
+  $("leadCode").value = code || "";
+  $("leadCode").readOnly = !!code;
+  $("leadCodeField").style.display = code ? "none" : "";
+  $("leadSub").innerHTML = code
+    ? "<b>"+esc(title || "회의")+"</b> · 회의 코드 "+code
+    : "회의 코드와 팀장 비밀번호를 입력하면 어느 기기에서든 팀장 화면을 열 수 있습니다.";
+  $("leadPin").value = ""; $("leadErr").textContent = "";
+  if(code) log("leader_gate", code, "leader", "");
+  show("lead");
+  setTimeout(function(){ (code ? $("leadPin") : $("leadCode")).focus(); }, 60);
 }
 function doLeadAuth(){
-  var m = getMeeting(activeCode); if(!m) return;
+  var code = ($("leadCode").value || "").trim().toUpperCase();
   var pin = $("leadPin").value;
+  if(code.length !== 6){ $("leadErr").textContent = "6자리 회의 코드를 입력해주세요."; return; }
   if(!pin){ $("leadErr").textContent = "팀장 비밀번호를 입력해주세요."; return; }
-  if(hashPin(m.code, pin) !== m.leaderPin){
-    $("leadErr").textContent = "팀장 비밀번호가 일치하지 않습니다.";
-    log("leader_gate_fail", m.code, "leader", "");
-    return;
-  }
-  authed[m.code] = true; $("leadPin").value = "";
-  openDash(m.code);
+  var h = hashPin(pin);
+  var btn = $("leadBtn"); btn.disabled = true;
+  store.checkLeader(code, h).then(function(st){
+    if(st === "no_meeting"){ $("leadErr").textContent = "그런 회의 코드를 찾을 수 없습니다."; return; }
+    if(st !== "ok" && st !== "open"){
+      $("leadErr").textContent = "팀장 비밀번호가 일치하지 않습니다.";
+      log("leader_gate_fail", code, "leader", "");
+      return;
+    }
+    activeCode = code; authed[code] = h; $("leadPin").value = "";
+    return refreshDash(code);
+  }).catch(fail).then(function(){ btn.disabled = false; });
 }
 var pickKey = null;
 function renderDash(m){
@@ -919,7 +1149,8 @@ function renderDash(m){
     '<dt>시간 범위</dt><dd>'+hLabel(m.hStart)+"–"+(m.hEnd===24?"24:00":hLabel(m.hEnd))+" · 1시간 단위 "+slots(m).length+'칸</dd>'+
     '<dt>팀 인원</dt><dd>'+m.size+'명</dd>'+
     '<dt>만든 날</dt><dd>'+new Date(m.createdAt).toLocaleString("ko-KR")+'</dd>'+
-    '<dt>팀장 잠금</dt><dd>'+(m.leaderPin ? "🔒 사용 중" : "없음")+'</dd>';
+    '<dt>팀장 잠금</dt><dd>'+((m.leaderPin || m.leaderLocked) ? "🔒 사용 중" : "없음")+'</dd>'+
+    '<dt>저장 위치</dt><dd>'+(online ? "서버 (팀원과 공유)" : "이 브라우저")+'</dd>';
 
   var cf = $("dConfirmed");
   if(pk){
@@ -948,11 +1179,13 @@ function renderDash(m){
     b.onclick = function(){
       var nm = b.getAttribute("data-name");
       if(!confirm(nm + "님의 응답을 삭제할까요? 비밀번호를 잊은 팀원은 삭제 후 다시 입력하면 됩니다.")) return;
-      var mm = getMeeting(m.code);
-      mm.responses = mm.responses.filter(function(r){ return r.name !== nm; });
-      putMeeting(mm);
-      log("response_delete", mm.code, "leader", nm);
-      renderDash(mm); toast(nm + "님 응답을 삭제했습니다");
+      b.disabled = true;
+      store.delResponse(m.code, authed[m.code], nm).then(function(st){
+        if(st !== "ok"){ toast("삭제하지 못했습니다"); return; }
+        log("response_delete", m.code, "leader", nm);
+        toast(nm + "님 응답을 삭제했습니다");
+        return refreshDash(m.code);
+      }).catch(fail);
     };
   });
 
@@ -998,16 +1231,19 @@ function deleteMeeting(){
     $("delErr").textContent = "회의 코드가 일치하지 않습니다.";
     return;
   }
-  var all = meetings();
-  delete all[m.code];
-  save(K.M, all);
-  save(K.O, load(K.O, []).filter(function(c){ return c !== m.code; }));
-  delete authed[m.code];
-  log("meeting_delete", m.code, "leader", "응답"+m.responses.length+"명");
-  activeCode = null;
-  resetDelBox();
-  renderHome(); show("home");
-  toast("회의를 삭제했습니다");
+  var code = m.code, n = m.responses.length;
+  var btn = $("delConfirm"); btn.disabled = true;
+  store.delMeeting(code, authed[code]).then(function(st){
+    if(st !== "ok"){ $("delErr").textContent = "삭제하지 못했습니다."; return; }
+    log("meeting_delete", code, "leader", "응답"+n+"명");
+    forgetOwned(code);
+    delete authed[code];
+    if(current && current.code === code) current = null;
+    activeCode = null;
+    resetDelBox();
+    renderHome(); show("home");
+    toast("회의를 삭제했습니다");
+  }).catch(fail).then(function(){ btn.disabled = false; });
 }
 /* 확정 순위 선택 상자: 모든 시간칸을 시간순으로 담고, 기본값은 추천 1·2·3순위 */
 function fillPickSelects(m){
@@ -1105,15 +1341,23 @@ function confirmPicks(code, keys, tookRecommendation){
   var r = rank(m), recTop = r.length ? r[0].key : "";
   var picks = keys.map(function(k){ var p = k.split("-"); return {d:+p[0], h:+p[1]}; });
   var fromTop = tookRecommendation || (keys[0] === recTop);
-  m.confirmed = {ts:Date.now(), picks:picks, fromTop:fromTop};
-  putMeeting(m);
-  // 1순위가 추천 1순위와 다르면 override로 기록한다.
-  var idx = -1;
-  for(var i=0;i<r.length;i++) if(r[i].key === keys[0]){ idx = i; break; }
-  log("final_confirm", code, "leader", "1순위"+keys[0]+"/추천순위"+(idx>=0?idx+1:"-")+"/총"+picks.length+"개");
-  if(!fromTop) log("override_recommend", code, "leader", "선택순위"+(idx>=0?idx+1:"-"));
-  resultFromJoin = false;
-  renderResult(m); show("result");
+  var confirmed = {ts:Date.now(), picks:picks, fromTop:fromTop};
+  var btn = $("doConfirm"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "저장 중…";
+
+  store.setConfirmed(code, authed[code], confirmed).then(function(st){
+    if(st !== "ok"){ toast("확정을 저장하지 못했습니다"); return; }
+    m.confirmed = confirmed;
+    // 1순위가 추천 1순위와 다르면 override로 기록한다.
+    var idx = -1;
+    for(var i=0;i<r.length;i++) if(r[i].key === keys[0]){ idx = i; break; }
+    log("final_confirm", code, "leader", "1순위"+keys[0]+"/추천순위"+(idx>=0?idx+1:"-")+"/총"+picks.length+"개");
+    if(!fromTop) log("override_recommend", code, "leader", "선택순위"+(idx>=0?idx+1:"-"));
+    resultFromJoin = false;
+    renderResult(m); show("result");
+  }).catch(fail).then(function(){
+    btn.disabled = false; btn.textContent = label;
+  });
 }
 
 /* ---------- 결과 ---------- */
@@ -1123,9 +1367,10 @@ function renderResult(m){
   var first = byKey[pk[0].d + "-" + pk[0].h];
   $("resSub").textContent = m.title + " · 회의 코드 " + m.code;
   $("resWhen").textContent = whenText(m, pk[0].d, pk[0].h);
+  // 팀장이 아니면 서버가 응답 상세를 가려주므로, 그때는 인원 수만 알린다.
   $("resMeta").textContent = n
     ? (first.avail + "/" + n + "명 참석 가능" + (first.pref ? " · " + first.pref + "명이 선호한 시간" : "") + (m.confirmed.fromTop ? " · 추천 1순위 그대로 확정" : " · 팀장이 직접 선택"))
-    : "응답 없음";
+    : ((m.people && m.people.length) ? m.people.length + "명의 응답을 모아 팀장이 확정했습니다" : "응답 없음");
 
   $("resBackup").innerHTML = pk.length > 1
     ? pk.slice(1).map(function(p, i){
@@ -1155,13 +1400,18 @@ function resultText(m){
 
 /* ---------- CSV ---------- */
 function exportCsv(){
-  var rows = load(K.L, []);
-  if(!rows.length){ toast("기록된 로그가 없습니다"); return; }
-  var head = "ts,iso,event,code,actor,meta";
-  var body = rows.map(function(r){
-    return [r.ts, r.iso, r.event, r.code, '"'+String(r.actor).replace(/"/g,'""')+'"', '"'+String(r.meta).replace(/"/g,'""')+'"'].join(",");
-  }).join("\n");
-  saveFile("v3_event_log.csv", "﻿"+head+"\n"+body);
+  var btn = $("expLog"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "모으는 중…";
+  store.events(activeCode, authed[activeCode]).then(function(rows){
+    if(!rows.length){ toast("기록된 로그가 없습니다"); return; }
+    var head = "ts,iso,event,code,actor,meta";
+    var body = rows.map(function(r){
+      return [r.ts, r.iso, r.event, r.code, '"'+String(r.actor).replace(/"/g,'""')+'"', '"'+String(r.meta).replace(/"/g,'""')+'"'].join(",");
+    }).join("\n");
+    saveFile("v3_event_log.csv", "﻿"+head+"\n"+body);
+  }).catch(fail).then(function(){
+    btn.disabled = false; btn.textContent = label;
+  });
 }
 function saveFile(name, text){
   // claude.ai 아티팩트로 볼 때는 downloads 권한을 통해 저장한다.
@@ -1241,25 +1491,34 @@ $("dashPaste").onclick = function(){
   var txt = prompt("팀원에게 받은 응답 코드를 붙여넣으세요 (R1.로 시작)");
   if(!txt) return;
   var m = getMeeting(activeCode); if(!m) return;
+  var o, rec;
   try{
-    var o = decodeResp(txt);
+    o = decodeResp(txt);
     if(o.c !== m.code) throw new Error("다른 회의의 응답 코드입니다.");
     var sl = slots(m);
     if(o.s.length !== sl.length) throw new Error("회의 설정과 맞지 않는 응답 코드입니다.");
     var old = m.responses.filter(function(r){ return r.name === o.n; })[0];
-    var rec = {name:o.n, ts:Date.now(), pin:(o.p || (old && old.pin) || null), slots:{}};
+    rec = {name:o.n, pin:(o.p || (old && old.pin) || null), slots:{}};
     sl.forEach(function(s, i){
       var ch = o.s[i];
       rec.slots[s.key] = ch === "0" ? "no" : (ch === "2" ? "prefer" : "ok");
     });
-    var existed = !!old;
-    m.responses = m.responses.filter(function(r){ return r.name !== o.n; });
-    m.responses.push(rec);
-    putMeeting(m);
-    log(existed ? "member_revise" : "member_submit", m.code, o.n, "응답코드 입력");
-    renderDash(m);
-    toast(o.n + "님 응답을 반영했습니다");
-  }catch(e){ alert("응답 코드를 읽을 수 없습니다.\n" + e.message); }
+  }catch(e){ alert("응답 코드를 읽을 수 없습니다.\n" + e.message); return; }
+
+  store.putResponse(m.code, rec.name, rec.pin, rec.slots).then(function(st){
+    if(st === "pin_fail"){ toast(rec.name + "님 이름은 비밀번호로 잠겨 있습니다"); return; }
+    log(st === "updated" ? "member_revise" : "member_submit", m.code, rec.name, "응답코드 입력");
+    toast(rec.name + "님 응답을 반영했습니다");
+    return refreshDash(m.code);
+  }).catch(fail);
+};
+$("dashRefresh").onclick = function(){
+  if(!activeCode) return;
+  var b = $("dashRefresh"); b.disabled = true; b.textContent = "새로고침 중…";
+  refreshDash(activeCode).catch(fail).then(function(){
+    b.disabled = false; b.textContent = "응답 새로고침";
+    toast("최신 응답을 불러왔습니다");
+  });
 };
 $("expLog").onclick = exportCsv;
 $("doConfirm").onclick = submitPicks;
@@ -1282,16 +1541,45 @@ $("delCode").addEventListener("keydown", function(e){ if(e.key === "Enter") dele
 
 $("leadBtn").onclick = doLeadAuth;
 $("leadPin").addEventListener("keydown", function(e){ if(e.key === "Enter") doLeadAuth(); });
+$("leadCode").addEventListener("input", function(){ this.value = this.value.toUpperCase(); $("leadErr").textContent = ""; });
+$("leadCode").addEventListener("keydown", function(e){ if(e.key === "Enter") $("leadPin").focus(); });
 $("leadBack").onclick = function(){ renderHome(); show("home"); };
+$("goLeader").onclick = function(){ showLeadGate(null, null); };
 
 $("copyResult").onclick = function(){ var m = getMeeting(activeCode); if(m) copy(resultText(m), "공지 문구를 복사했습니다"); };
 $("resBackDash").onclick = function(){ openDash(activeCode); };
 $("resEdit").onclick = function(){ var m = getMeeting(activeCode); if(m) startRespond(m, myName); };
 $("resHome").onclick = function(){ renderHome(); show("home"); };
 
-/* ---------- 시작 ---------- */
+/* ---------- 시작 ----------
+   서버에 한 번 찔러보고 모드를 정한다. 아티팩트 뷰어처럼 외부 통신이 막힌 곳에서는
+   이 요청이 실패하고 브라우저 저장 모드로 조용히 내려간다. */
+function applyMode(isOnline){
+  online = isOnline;
+  var b = $("modeBadge");
+  b.className = "mode " + (online ? "on" : "off");
+  b.textContent = online ? "● 팀 공유" : "○ 이 브라우저";
+  b.title = online
+    ? "회의가 서버에 저장됩니다. 팀원이 각자 기기에서 코드로 참여할 수 있습니다."
+    : "이 브라우저에만 저장됩니다. 팀원이 다른 기기를 쓰면 응답 코드로 합쳐야 합니다.";
+  // 응답 코드 수동 합치기는 서버 모드에서 필요 없다.
+  $("dashPaste").style.display = online ? "none" : "";
+  $("dashRefresh").style.display = online ? "" : "none";
+  var rc = $("respCode").parentNode;
+  if(rc) rc.style.display = online ? "none" : "";
+  // 서버 모드에서만 다른 기기에서 팀장 화면을 열 수 있다.
+  $("goLeader").style.display = online ? "block" : "none";
+  renderHome();
+}
+function boot(){
+  if(!SB.url || !SB.key){ applyMode(false); return; }
+  var timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error("timeout")); }, 6000); });
+  Promise.race([rpc("get_meeting", {p_code:"______"}), timeout])
+    .then(function(){ applyMode(true); })
+    .catch(function(){ applyMode(false); });
+}
 log("home_view", "", "", "");
-renderHome();
+boot();
 })();
 </script>
 <!--ARTIFACT-END-->
