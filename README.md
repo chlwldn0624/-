@@ -33,9 +33,34 @@ open index.html
 
 1. https://vercel.com 에서 이 저장소를 Import
 2. **Settings → Environment Variables** 에 두 개를 추가 (Production·Preview·Development 모두 체크)
-   - `SUPABASE_URL` — 예: `https://xxxxxxxx.supabase.co`
-   - `SUPABASE_ANON_KEY` — publishable(anon) 키
+   - 주소: `SUPABASE_URL` (또는 `SUPABASE_PROJECT_URL`) — 예: `https://xxxxxxxx.supabase.co`
+   - 키: `SUPABASE_ANON_KEY` (또는 `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_KEY`) — 아래 표 참고
 3. Deploy. 환경변수를 나중에 바꾸면 재배포해야 반영된다.
+
+Framework Preset은 `Other`, Build Command와 Output Directory는 비워둔다. 빌드가 없는
+정적 HTML + `api/` 함수 조합이다.
+
+### 어떤 키를 넣는가
+
+Supabase의 **Project Settings → API Keys** 는 페이지 이름이고, 그 안에 여러 키가 있다.
+Supabase가 `anon` 키를 `Publishable` 로 이름만 바꿨으므로 아래 둘 중 어느 것이든 된다.
+
+| 화면 표시 | DB 역할 | 브라우저 |
+|---|---|---|
+| `Publishable key` — `sb_publishable_…` | `anon` | 넣어도 됨 |
+| Legacy API keys 탭의 `anon` `public` — `eyJ…` | `anon` | 넣어도 됨 |
+| `Secret keys` — `sb_secret_…` | service_role 대체 | **절대 안 됨** |
+| Legacy API keys 탭의 `service_role` — `eyJ…` | `service_role` | **절대 안 됨** |
+
+레거시 키는 `anon` 과 `service_role` 이 둘 다 `eyJ…` 로 시작해 겉모습으로 구분되지 않는다.
+넣은 키가 안전한지는 테이블 직접 읽기로 판정한다.
+
+```bash
+KEY='...' && curl -s "$SUPABASE_URL/rest/v1/meetings?select=code" -H "apikey: $KEY"
+```
+
+`[]` 가 나오면 RLS가 막고 있는 안전한 키다. 행이 나오면 RLS를 우회하는 키이므로 즉시
+Supabase에서 폐기하고 publishable 키로 바꾼다.
 
 [api/config.js](api/config.js) 가 이 값을 읽어 브라우저에 내려준다. 정적 HTML은 환경변수를
 런타임에 직접 읽을 수 없어 이 함수 한 개를 둔다.
