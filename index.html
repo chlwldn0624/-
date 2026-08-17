@@ -1,0 +1,1203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--ARTIFACT-START-->
+<title>회의시간 자동합의 V3</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --surface-2:#f1f2f7; --line:#e2e4ee;
+  --text:#1a1c25; --muted:#6b6f80; --faint:#9aa0b0;
+  --brand:#4f46e5; --brand-soft:#eceafd; --brand-text:#4338ca;
+  --ok:#16a34a; --ok-soft:#e7f6ec;
+  --no:#e11d48; --no-soft:#fdeaee;
+  --pref:#d97706; --pref-soft:#fdf1dd;
+  --shadow:0 1px 2px rgba(20,22,40,.06), 0 8px 24px rgba(20,22,40,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1117; --surface:#171a22; --surface-2:#1e2230; --line:#2b3040;
+    --text:#e9eaf0; --muted:#a0a6b8; --faint:#767d92;
+    --brand:#7c74f5; --brand-soft:#25244a; --brand-text:#c3bffb;
+    --ok:#4ade80; --ok-soft:#173025;
+    --no:#fb7185; --no-soft:#3a1c26;
+    --pref:#fbbf24; --pref-soft:#3a2c14;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1117; --surface:#171a22; --surface-2:#1e2230; --line:#2b3040;
+  --text:#e9eaf0; --muted:#a0a6b8; --faint:#767d92;
+  --brand:#7c74f5; --brand-soft:#252444; --brand-text:#c3bffb;
+  --ok:#4ade80; --ok-soft:#173025;
+  --no:#fb7185; --no-soft:#3a1c26;
+  --pref:#fbbf24; --pref-soft:#3a2c14;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+  line-height:1.55; -webkit-text-size-adjust:100%;
+}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+.wrap{max-width:760px; margin:0 auto; padding:28px 18px 72px}
+.screen{display:none}
+.screen.on{display:block}
+
+/* header */
+.appbar{display:flex; align-items:center; gap:10px; margin-bottom:22px}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;letter-spacing:-.02em}
+.appbar h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
+.appbar p{margin:0;font-size:12.5px;color:var(--muted)}
+.spacer{flex:1}
+.ghost-btn{background:none;border:1px solid var(--line);color:var(--muted);border-radius:9px;padding:6px 10px;font-size:12.5px;cursor:pointer;font-family:inherit}
+.ghost-btn:hover{color:var(--text);border-color:var(--faint)}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px}
+.card h2{font-size:15.5px;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+.card .sub{font-size:13px;color:var(--muted);margin:0 0 16px}
+
+/* home */
+.hero{text-align:center;padding:34px 20px 8px}
+.hero h2{font-size:26px;line-height:1.3;margin:0 0 10px;letter-spacing:-.02em}
+.hero p{color:var(--muted);font-size:14px;margin:0 auto;max-width:400px}
+.pill{display:inline-block;background:var(--brand-soft);color:var(--brand-text);font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;margin-bottom:14px}
+.choices{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:26px}
+@media (max-width:520px){.choices{grid-template-columns:1fr}}
+.choice{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 20px;text-align:left;cursor:pointer;font-family:inherit;color:inherit;box-shadow:var(--shadow);transition:transform .12s ease,border-color .12s ease}
+.choice:hover{transform:translateY(-2px);border-color:var(--brand)}
+.choice .ic{font-size:22px;display:block;margin-bottom:10px}
+.choice b{display:block;font-size:15.5px;margin-bottom:4px;letter-spacing:-.01em}
+.choice span.d{font-size:12.5px;color:var(--muted);display:block}
+
+/* forms */
+label.f{display:block;font-size:13px;font-weight:600;margin:0 0 7px}
+.hint{font-size:12px;color:var(--faint);font-weight:400}
+input[type=text],input[type=number],input[type=password],select{
+  width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);
+  color:var(--text);font-size:14.5px;font-family:inherit;outline:none
+}
+input:focus,select:focus{border-color:var(--brand);background:var(--surface)}
+.field{margin-bottom:18px}
+.row{display:flex;gap:10px;align-items:center}
+.row > *{flex:1}
+.row .to{flex:0 0 auto;color:var(--muted);font-size:13px}
+button.primary{
+  width:100%;padding:13px;border:none;border-radius:11px;background:var(--brand);color:#fff;
+  font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:-.01em
+}
+button.primary:hover{filter:brightness(1.08)}
+button.primary:disabled{opacity:.45;cursor:not-allowed;filter:none}
+button.sec{width:100%;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+button.sec:hover{border-color:var(--faint)}
+.link{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit;padding:10px;display:block;margin:6px auto 0;text-decoration:underline;text-underline-offset:3px}
+.err{color:var(--no);font-size:12.5px;margin-top:8px;min-height:16px}
+
+/* calendar */
+.cal{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-head b{font-size:14px}
+.cal-nav{background:none;border:1px solid var(--line);border-radius:8px;width:28px;height:28px;cursor:pointer;color:var(--text);font-family:inherit}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.dow{text-align:center;font-size:11px;color:var(--faint);padding:4px 0}
+.day{aspect-ratio:1;border:none;background:none;border-radius:9px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit}
+.day:hover:not(:disabled){background:var(--line)}
+.day.sel{background:var(--brand);color:#fff;font-weight:700}
+.day:disabled{color:var(--faint);opacity:.35;cursor:default}
+.day.empty{visibility:hidden}
+.chosen{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--brand-soft);color:var(--brand-text);font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px}
+
+/* code display */
+.codebox{text-align:center;padding:26px 20px;background:var(--brand-soft);border-radius:14px;margin-bottom:16px}
+.codebox .lbl{font-size:12.5px;color:var(--brand-text);font-weight:600;margin-bottom:6px}
+.codebox .code{font-size:38px;font-weight:800;letter-spacing:.14em;color:var(--brand-text);font-variant-numeric:tabular-nums}
+input.codein{text-align:center;font-size:26px;letter-spacing:.16em;font-weight:800;text-transform:uppercase;padding:16px 12px}
+
+/* grid */
+.gridwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:10px}
+.tgrid{display:grid;gap:3px;min-width:min-content;touch-action:none}
+.gh{font-size:11.5px;font-weight:700;text-align:center;padding:5px 2px;color:var(--muted);line-height:1.25}
+.gh small{display:block;font-weight:500;font-size:10.5px;color:var(--faint)}
+.hr{font-size:11px;color:var(--faint);text-align:right;padding-right:7px;display:flex;align-items:center;justify-content:flex-end;font-variant-numeric:tabular-nums}
+.cell{height:30px;border-radius:6px;border:1px solid rgba(22,163,74,.24);cursor:pointer;display:grid;place-items:center;font-size:11px;font-weight:700;user-select:none;background:var(--ok-soft);color:var(--ok)}
+.cell[data-s="no"]{background:var(--no-soft);color:var(--no);border-color:rgba(225,29,72,.3)}
+.cell[data-s="prefer"]{background:var(--pref-soft);color:var(--pref);border-color:rgba(217,119,6,.34)}
+.cell.ro{cursor:default}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+.legend i{width:12px;height:12px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:5px}
+
+/* brush palette */
+.brushes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.brush{padding:11px 6px;border-radius:11px;border:1.5px solid var(--line);background:var(--surface);cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted)}
+.brush.on[data-b="prefer"]{border-color:var(--pref);background:var(--pref-soft);color:var(--pref)}
+.brush.on[data-b="ok"]{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+.brush.on[data-b="no"]{border-color:var(--no);background:var(--no-soft);color:var(--no)}
+
+/* heat cells */
+.heat{height:30px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent}
+.heat.pick{outline:2px solid var(--brand);outline-offset:1px}
+
+/* candidates */
+.cand{border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:10px;background:var(--surface)}
+.cand.best{border-color:var(--brand);background:var(--brand-soft)}
+.cand .rank{font-size:11.5px;font-weight:800;color:var(--muted);letter-spacing:.02em}
+.cand.best .rank{color:var(--brand-text)}
+.cand .when{font-size:18px;font-weight:800;margin:3px 0 6px;letter-spacing:-.02em}
+.cand .why{font-size:12.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--surface-2);color:var(--muted)}
+.tag.all{background:var(--ok-soft);color:var(--ok)}
+.tag.pf{background:var(--pref-soft);color:var(--pref)}
+.cand button{margin-top:12px}
+
+/* misc */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.stat{background:var(--surface-2);border-radius:11px;padding:11px 12px}
+.stat b{display:block;font-size:19px;font-weight:800;letter-spacing:-.02em}
+.stat span{font-size:11.5px;color:var(--muted)}
+.people{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.person{font-size:12px;background:var(--surface-2);border-radius:999px;padding:4px 5px 4px 11px;color:var(--text);display:inline-flex;align-items:center;gap:4px}
+.person em{font-style:normal;color:var(--pref);font-weight:700}
+.person .lock{font-size:10px;font-weight:400}
+.pdel{border:none;background:none;color:var(--faint);cursor:pointer;font-family:inherit;font-size:14px;line-height:1;padding:0 4px;border-radius:999px}
+.pdel:hover{color:var(--no);background:var(--no-soft)}
+.big-result{text-align:center;padding:28px 18px;background:var(--ok-soft);border-radius:14px;margin-bottom:14px}
+.big-result .lbl{font-size:12.5px;color:var(--ok);font-weight:700;margin-bottom:6px}
+.big-result .when{font-size:25px;font-weight:800;letter-spacing:-.02em;color:var(--text)}
+.big-result .meta{font-size:12.5px;color:var(--muted);margin-top:6px}
+.notice{font-size:12.5px;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:11px 13px;margin-top:12px}
+.notice.done{background:var(--ok-soft);color:var(--ok)}
+.notice.done b{color:var(--text)}
+dl.info{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0 0 16px;font-size:12.5px}
+dl.info dt{color:var(--muted)}
+dl.info dd{margin:0;color:var(--text);font-weight:600}
+.backup{display:flex;gap:9px;align-items:baseline;padding:10px 13px;border:1px solid var(--line);border-radius:11px;margin-top:9px;font-size:13.5px}
+.backup .bl{font-size:11px;font-weight:800;color:var(--muted);flex:0 0 auto}
+.backup .bw{font-weight:700}
+.backup .bm{font-size:11.5px;color:var(--muted);margin-left:auto;flex:0 0 auto}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;word-break:break-all;background:var(--surface-2);border-radius:8px;padding:9px 10px;color:var(--muted);margin-top:8px}
+.mylist{margin-top:22px}
+.mylist h3{font-size:12.5px;color:var(--muted);font-weight:600;margin:0 0 8px;padding-left:2px}
+.mrow{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:7px;cursor:pointer}
+.mrow:hover{border-color:var(--brand)}
+.mrow b{font-size:13.5px;font-weight:700}
+.mrow span{font-size:11.5px;color:var(--muted);display:block}
+.mrow .mc{margin-left:auto;font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--brand-text)}
+.foot{text-align:center;font-size:11.5px;color:var(--faint);margin-top:26px;line-height:1.7}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:.22s}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="appbar">
+    <div class="logo">V3</div>
+    <div>
+      <h1>팀플 회의시간 자동합의</h1>
+      <p>선호도 기반 최적시간 자동추천</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="homeBtn">처음으로</button>
+  </div>
+
+  <!-- ===== 홈 ===== -->
+  <section class="screen on" id="s-home">
+    <div class="hero">
+      <div class="pill">불가능 · 가능 · ⭐선호</div>
+      <h2>무엇을 하시겠어요?</h2>
+      <p>팀장은 회의를 만들어 코드를 발급받고, 팀원은 코드를 입력해 시간을 표시합니다.</p>
+    </div>
+    <div class="choices">
+      <button class="choice" id="goCreate">
+        <span class="ic">🗓️</span>
+        <b>회의 생성하기</b>
+        <span class="d">날짜와 시간 범위를 정하면 회의 코드가 발급됩니다</span>
+      </button>
+      <button class="choice" id="goJoin">
+        <span class="ic">✍️</span>
+        <b>회의 참여하기</b>
+        <span class="d">회의 코드로 시간을 표시하고, 같은 이름으로 다시 들어와 수정합니다</span>
+      </button>
+    </div>
+    <div class="mylist" id="myList"></div>
+    <p class="foot">V1 가능시간 선택형 → V2 불가능시간 제외형 → <b>V3 선호도 기반 최적시간 자동추천</b></p>
+  </section>
+
+  <!-- ===== 생성 ===== -->
+  <section class="screen" id="s-create">
+    <div class="card">
+      <h2>회의 만들기</h2>
+      <p class="sub">조율할 날짜와 시간 범위를 정해주세요.</p>
+
+      <div class="field">
+        <label class="f" for="mTitle">회의 이름</label>
+        <input type="text" id="mTitle" placeholder="예: 캡스톤 3주차 팀 회의" maxlength="40">
+      </div>
+
+      <div class="field">
+        <label class="f" for="mSize">팀 인원 <span class="hint">응답 진행률 계산에 사용됩니다</span></label>
+        <input type="number" id="mSize" value="5" min="2" max="20">
+      </div>
+
+      <div class="field">
+        <label class="f">날짜 선택 <span class="hint">최대 7일, 날짜를 눌러 선택/해제</span></label>
+        <div class="cal">
+          <div class="cal-head">
+            <button class="cal-nav" id="calPrev">‹</button>
+            <b id="calLabel"></b>
+            <button class="cal-nav" id="calNext">›</button>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div class="chosen" id="chosenDates"></div>
+      </div>
+
+      <div class="field">
+        <label class="f">시간 범위 <span class="hint">0시 ~ 24시, 1시간 단위</span></label>
+        <div class="row">
+          <select id="hStart"></select>
+          <span class="to">부터</span>
+          <select id="hEnd"></select>
+          <span class="to">까지</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="f" for="mLeadPin">팀장 비밀번호 <span class="hint">선택 — 정하면 팀장 화면을 나만 열 수 있어요</span></label>
+        <input type="password" id="mLeadPin" placeholder="안 쓰면 비워두세요" maxlength="20" autocomplete="off">
+      </div>
+
+      <div class="err" id="createErr"></div>
+      <button class="primary" id="createBtn">회의 생성하고 코드 발급받기</button>
+    </div>
+  </section>
+
+  <!-- ===== 코드 발급 ===== -->
+  <section class="screen" id="s-created">
+    <div class="card">
+      <h2>회의가 생성되었습니다</h2>
+      <p class="sub">아래 코드를 팀원에게 공유하세요.</p>
+      <div class="codebox">
+        <div class="lbl">회의 코드</div>
+        <div class="code" id="newCode">------</div>
+      </div>
+      <div id="createdInfo" class="notice"></div>
+      <div class="split" style="margin-top:14px">
+        <button class="sec" id="copyCode">코드 복사</button>
+        <button class="sec" id="copyInvite">초대 문구 복사</button>
+      </div>
+      <button class="primary" id="toDash" style="margin-top:9px">팀장 화면으로 이동</button>
+    </div>
+  </section>
+
+  <!-- ===== 팀장 확인 ===== -->
+  <section class="screen" id="s-lead">
+    <div class="card">
+      <h2>팀장 확인</h2>
+      <p class="sub" id="leadSub"></p>
+      <div class="field">
+        <label class="f" for="leadPin">팀장 비밀번호</label>
+        <input type="password" id="leadPin" placeholder="회의를 만들 때 정한 비밀번호" maxlength="20" autocomplete="off">
+      </div>
+      <div class="err" id="leadErr"></div>
+      <button class="primary" id="leadBtn">팀장 화면 열기</button>
+      <button class="link" id="leadBack">처음으로</button>
+    </div>
+  </section>
+
+  <!-- ===== 참여: 코드 입력 ===== -->
+  <section class="screen" id="s-join">
+    <div class="card">
+      <h2>회의 참여하기</h2>
+      <p class="sub">팀장에게 받은 6자리 회의 코드를 입력하세요.</p>
+      <div class="field">
+        <input type="text" id="joinCode" class="codein" placeholder="ABC123" maxlength="6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label class="f" for="joinName">이름 <span class="hint">이전에 쓴 이름으로 들어오면 내 응답을 수정할 수 있어요</span></label>
+        <input type="text" id="joinName" placeholder="예: 최지우" maxlength="12">
+      </div>
+      <div class="field">
+        <label class="f" for="joinPin">개인 비밀번호 <span class="hint">선택 — 정해두면 이 이름은 나만 수정할 수 있어요</span></label>
+        <input type="password" id="joinPin" placeholder="안 쓰면 비워두세요" maxlength="20" autocomplete="off">
+      </div>
+      <div class="err" id="joinErr"></div>
+      <button class="primary" id="joinBtn">시간 입력하러 가기</button>
+    </div>
+  </section>
+
+  <!-- ===== 참여: 시간 입력 ===== -->
+  <section class="screen" id="s-respond">
+    <div class="card">
+      <h2 id="rTitle">시간 표시하기</h2>
+      <p class="sub">기본은 <b>가능</b>입니다. 안 되는 시간만 <b>불가능</b>으로 빼고, 특히 좋은 시간에 <b>⭐선호</b>를 눌러주세요.</p>
+      <div class="notice" id="rNotice" style="display:none;margin:0 0 14px"></div>
+      <div class="brushes">
+        <button class="brush" data-b="no">✕ 불가능</button>
+        <button class="brush on" data-b="ok">가능</button>
+        <button class="brush" data-b="prefer">★ 선호</button>
+      </div>
+      <div class="gridwrap"><div class="tgrid" id="respGrid"></div></div>
+      <div class="legend">
+        <span><i style="background:var(--no-soft)"></i>불가능</span>
+        <span><i style="background:var(--ok-soft)"></i>가능</span>
+        <span><i style="background:var(--pref-soft)"></i>선호</span>
+        <span style="color:var(--faint)">칸을 누르거나 드래그해서 칠하세요</span>
+      </div>
+      <button class="primary" id="submitResp" style="margin-top:16px">제출하기</button>
+      <button class="link" id="respBack">뒤로</button>
+    </div>
+  </section>
+
+  <!-- ===== 제출 완료 ===== -->
+  <section class="screen" id="s-done">
+    <div class="card">
+      <h2>제출 완료 🎉</h2>
+      <p class="sub" id="doneSub"></p>
+      <div class="notice" id="doneEditHint"></div>
+      <div class="notice">
+        팀장이 다른 기기를 쓰고 있다면 아래 <b>응답 코드</b>를 복사해서 팀장에게 보내주세요.
+        같은 브라우저에서 테스트하는 경우에는 보내지 않아도 자동으로 반영됩니다.
+        <div class="mono" id="respCode"></div>
+      </div>
+      <div class="split" style="margin-top:12px">
+        <button class="sec" id="copyResp">응답 코드 복사</button>
+        <button class="sec" id="editResp">수정하기</button>
+      </div>
+      <button class="link" id="doneHome">처음으로</button>
+    </div>
+  </section>
+
+  <!-- ===== 팀장 대시보드 ===== -->
+  <section class="screen" id="s-dash">
+    <div class="card">
+      <h2 id="dTitle">응답 현황</h2>
+      <p class="sub" id="dSub"></p>
+      <div class="notice" id="dConfirmed" style="display:none;margin:0 0 16px"></div>
+      <dl class="info" id="dInfo"></dl>
+      <div class="stats">
+        <div class="stat"><b id="stResp">0</b><span>응답 인원</span></div>
+        <div class="stat"><b id="stRate">0%</b><span>응답률</span></div>
+        <div class="stat"><b id="stPref">0</b><span>선호 표시</span></div>
+      </div>
+      <div class="people" id="people"></div>
+      <div class="split" style="margin-top:14px">
+        <button class="sec" id="dashShare">코드 공유</button>
+        <button class="sec" id="dashPaste">응답 코드 입력</button>
+      </div>
+    </div>
+
+    <div class="card" id="recCard">
+      <h2>추천 회의시간</h2>
+      <p class="sub">참석 가능 인원 → 선호 수 → 빠른 시간 순으로 정렬했습니다.</p>
+      <div id="cands"></div>
+    </div>
+
+    <div class="card" id="pickCard">
+      <h2>확정 회의시간 정하기</h2>
+      <p class="sub">1순위는 실제로 모일 시간, 2·3순위는 예비 시간입니다. 추천을 그대로 써도 되고 직접 바꿔도 됩니다.</p>
+      <div class="field">
+        <label class="f" for="pk1">1순위 <span class="hint">실제 회의시간</span></label>
+        <select id="pk1"></select>
+      </div>
+      <div class="field">
+        <label class="f" for="pk2">2순위 <span class="hint">예비 · 선택</span></label>
+        <select id="pk2"></select>
+      </div>
+      <div class="field">
+        <label class="f" for="pk3">3순위 <span class="hint">예비 · 선택</span></label>
+        <select id="pk3"></select>
+      </div>
+      <div class="err" id="pickErr"></div>
+      <button class="primary" id="doConfirm">이 순서로 확정하기</button>
+    </div>
+
+    <div class="card">
+      <h2>전체 시간표</h2>
+      <p class="sub">숫자는 참석 가능 인원, ⭐는 선호 표시 수입니다. 칸을 눌러 직접 확정할 수도 있습니다.</p>
+      <div class="gridwrap"><div class="tgrid" id="heatGrid"></div></div>
+      <div id="pickBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>측정 데이터</h2>
+      <p class="sub">사용성 테스트용 행동로그입니다.</p>
+      <button class="sec" id="expLog">이벤트 로그 CSV 내보내기</button>
+      <div class="notice">회의 정보와 팀원 응답은 자동으로 지워지지 않습니다. 확정한 뒤에도 이 화면에서 계속 확인하고, 확정 순위를 다시 바꿀 수 있습니다.</div>
+    </div>
+  </section>
+
+  <!-- ===== 최종 결과 ===== -->
+  <section class="screen" id="s-result">
+    <div class="card">
+      <h2>회의시간이 확정되었습니다</h2>
+      <p class="sub" id="resSub"></p>
+      <div class="big-result">
+        <div class="lbl">1순위 · 확정된 회의시간</div>
+        <div class="when" id="resWhen"></div>
+        <div class="meta" id="resMeta"></div>
+      </div>
+      <div id="resBackup"></div>
+      <div id="resAbsent" class="notice" style="display:none"></div>
+      <button class="sec" id="copyResult" style="margin-top:12px">확정 공지 문구 복사</button>
+      <button class="link" id="resEdit" style="display:none">내 가능시간 수정하기</button>
+      <button class="link" id="resBackDash">팀장 화면으로</button>
+      <button class="link" id="resHome">처음으로</button>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- 저장소 ---------- */
+var K = {M:"v3_meetings", O:"v3_owned", L:"v3_logs", N:"v3_name"};
+var mem = {};
+function load(k, d){
+  try{ var v = localStorage.getItem(k); if(v !== null) return JSON.parse(v); }catch(e){}
+  return mem[k] !== undefined ? JSON.parse(mem[k]) : d;
+}
+function save(k, v){
+  var s = JSON.stringify(v);
+  mem[k] = s;
+  try{ localStorage.setItem(k, s); }catch(e){}
+}
+function meetings(){ return load(K.M, {}); }
+function putMeeting(m){ var all = meetings(); all[m.code] = m; save(K.M, all); }
+function getMeeting(c){ return meetings()[c] || null; }
+
+/* ---------- 행동로그 ---------- */
+function log(ev, code, actor, meta){
+  var arr = load(K.L, []);
+  arr.push({ts:Date.now(), iso:new Date().toISOString(), event:ev, code:code||"", actor:actor||"", meta:meta==null?"":String(meta)});
+  if(arr.length > 3000) arr = arr.slice(-3000);
+  save(K.L, arr);
+}
+
+/* ---------- 유틸 ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var DOW = ["일","월","화","수","목","금","토"];
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function parseYmd(s){ var p = s.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function dLabel(s){ var d = parseYmd(s); return (d.getMonth()+1)+"/"+d.getDate(); }
+function dowLabel(s){ return DOW[parseYmd(s).getDay()]; }
+function hLabel(h){ return String(h).padStart(2,"0")+":00"; }
+function slots(m){
+  var out = [];
+  for(var i=0;i<m.dates.length;i++) for(var h=m.hStart;h<m.hEnd;h++) out.push({d:i, h:h, key:i+"-"+h});
+  return out;
+}
+function whenText(m, d, h){
+  return dLabel(m.dates[d])+"("+dowLabel(m.dates[d])+") "+hLabel(h)+"–"+hLabel(h+1);
+}
+/* 확정은 1·2·3순위 배열로 보관한다. 단일 슬롯만 있던 이전 데이터도 읽을 수 있게 맞춰준다. */
+function picksOf(m){
+  var c = m.confirmed;
+  if(!c) return null;
+  if(c.picks && c.picks.length) return c.picks;
+  if(typeof c.d === "number") return [{d:c.d, h:c.h}];
+  return null;
+}
+function toast(t){
+  var el = $("toast"); el.textContent = t; el.classList.add("on");
+  clearTimeout(el._t); el._t = setTimeout(function(){ el.classList.remove("on"); }, 1900);
+}
+function copy(text, msg){
+  var done = function(){ toast(msg || "복사했습니다"); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){ fallback(); });
+  } else { fallback(); }
+  function fallback(){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); done(); }catch(e){ toast("복사에 실패했습니다"); }
+    document.body.removeChild(ta);
+  }
+}
+function b64e(s){
+  var bytes = new TextEncoder().encode(s), bin = "";
+  for(var i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function b64d(s){
+  s = s.replace(/-/g,"+").replace(/_/g,"/");
+  while(s.length % 4) s += "=";
+  var bin = atob(s), bytes = new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+/* 받침 여부에 따라 조사를 고른다 (최지우는 / 최지원은) */
+function josa(word, withJong, withoutJong){
+  var c = String(word).charCodeAt(String(word).length - 1);
+  var hasJong = (c >= 0xAC00 && c <= 0xD7A3) ? ((c - 0xAC00) % 28 !== 0) : true;
+  return hasJong ? withJong : withoutJong;
+}
+/* 개인 비밀번호는 평문으로 두지 않도록 회의 코드를 섞어 해시로만 보관한다.
+   팀원끼리 실수로 서로의 응답을 덮어쓰지 않게 막는 잠금이며, 암호학적 보안은 아니다. */
+function hashPin(code, pin){
+  var s = code + "|" + pin, h1 = 5381, h2 = 52711, i;
+  for(i=0;i<s.length;i++){
+    var c = s.charCodeAt(i);
+    h1 = ((h1 << 5) + h1 + c) >>> 0;
+    h2 = ((h2 << 5) + h2 + (c ^ 0x5f)) >>> 0;
+  }
+  return h1.toString(16) + h2.toString(16);
+}
+var ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function newCode(){
+  var all = meetings(), c;
+  do{
+    c = "";
+    for(var i=0;i<6;i++) c += ALPHA[Math.floor(Math.random()*ALPHA.length)];
+  } while(all[c]);
+  return c;
+}
+
+/* ---------- 화면 전환 ---------- */
+var cur = "home";
+function show(name){
+  var list = document.querySelectorAll(".screen");
+  for(var i=0;i<list.length;i++) list[i].classList.remove("on");
+  $("s-"+name).classList.add("on");
+  cur = name;
+  window.scrollTo(0,0);
+}
+
+/* ---------- 홈 ---------- */
+function renderHome(){
+  var owned = load(K.O, []), all = meetings(), box = $("myList"), html = "";
+  var valid = owned.filter(function(c){ return all[c]; });
+  if(valid.length !== owned.length) save(K.O, valid);
+  if(valid.length){
+    html = '<h3>내가 만든 회의</h3>';
+    valid.slice().reverse().forEach(function(c){
+      var m = all[c];
+      var pk = picksOf(m);
+      var st = pk ? "확정 "+whenText(m, pk[0].d, pk[0].h) : (m.responses.length + "명 응답");
+      html += '<div class="mrow" data-code="'+c+'"><div><b>'+esc(m.title)+(m.leaderPin?' 🔒':'')+'</b><span>'+m.dates.length+'일 · '+hLabel(m.hStart)+'–'+(m.hEnd===24?"24:00":hLabel(m.hEnd))+' · '+st+'</span></div><div class="mc">'+c+'</div></div>';
+    });
+  }
+  box.innerHTML = html;
+  Array.prototype.forEach.call(box.querySelectorAll(".mrow"), function(r){
+    r.onclick = function(){ openDash(r.getAttribute("data-code")); };
+  });
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+/* ---------- 생성: 달력 ---------- */
+var calY, calM, picked = [];
+function initCreate(){
+  var now = new Date();
+  calY = now.getFullYear(); calM = now.getMonth(); picked = [];
+  $("mTitle").value = ""; $("mSize").value = 5; $("createErr").textContent = ""; $("mLeadPin").value = "";
+  var hs = $("hStart"), he = $("hEnd");
+  hs.innerHTML = ""; he.innerHTML = "";
+  for(var h=0; h<=23; h++) hs.add(new Option(hLabel(h), h));
+  for(var h2=1; h2<=24; h2++) he.add(new Option(h2===24?"24:00":hLabel(h2), h2));
+  hs.value = 9; he.value = 22;
+  drawCal(); drawChosen();
+}
+function drawCal(){
+  $("calLabel").textContent = calY + "년 " + (calM+1) + "월";
+  var g = $("calGrid"), html = "";
+  for(var i=0;i<7;i++) html += '<div class="dow">'+DOW[i]+'</div>';
+  var first = new Date(calY, calM, 1), start = first.getDay();
+  var days = new Date(calY, calM+1, 0).getDate();
+  var today = new Date(); today.setHours(0,0,0,0);
+  for(var b=0;b<start;b++) html += '<button class="day empty" disabled></button>';
+  for(var d=1; d<=days; d++){
+    var dt = new Date(calY, calM, d), s = ymd(dt);
+    var past = dt < today, sel = picked.indexOf(s) >= 0;
+    html += '<button class="day'+(sel?" sel":"")+'" data-d="'+s+'"'+(past?" disabled":"")+'>'+d+'</button>';
+  }
+  g.innerHTML = html;
+  Array.prototype.forEach.call(g.querySelectorAll(".day[data-d]"), function(btn){
+    btn.onclick = function(){
+      var s = btn.getAttribute("data-d"), i = picked.indexOf(s);
+      if(i >= 0) picked.splice(i,1);
+      else if(picked.length >= 7){ toast("날짜는 최대 7일까지 선택할 수 있어요"); return; }
+      else picked.push(s);
+      picked.sort();
+      drawCal(); drawChosen();
+    };
+  });
+}
+function drawChosen(){
+  $("chosenDates").innerHTML = picked.length
+    ? picked.map(function(s){ return '<span class="chip">'+dLabel(s)+'('+dowLabel(s)+')</span>'; }).join("")
+    : '<span class="hint">아직 선택한 날짜가 없습니다</span>';
+}
+
+/* ---------- 생성 실행 ---------- */
+function createMeeting(){
+  var err = $("createErr"); err.textContent = "";
+  var title = $("mTitle").value.trim() || "팀플 회의";
+  var size = Math.max(2, Math.min(20, parseInt($("mSize").value,10) || 5));
+  var hs = parseInt($("hStart").value,10), he = parseInt($("hEnd").value,10);
+  if(!picked.length){ err.textContent = "날짜를 최소 1일 선택해주세요."; return; }
+  if(he <= hs){ err.textContent = "종료 시간은 시작 시간보다 뒤여야 합니다."; return; }
+  var code = newCode();
+  var lead = $("mLeadPin").value;
+  var m = {
+    code:code, title:title, size:size, dates:picked.slice(),
+    hStart:hs, hEnd:he, createdAt:Date.now(), responses:[], confirmed:null,
+    leaderPin: lead ? hashPin(code, lead) : null
+  };
+  putMeeting(m);
+  var owned = load(K.O, []); owned.push(m.code); save(K.O, owned);
+  authed[m.code] = true;
+  log("schedule_create", m.code, "leader", m.dates.length+"일/"+hs+"-"+he+"시/"+slots(m).length+"슬롯"+(m.leaderPin?"/팀장잠금":""));
+  activeCode = m.code;
+  $("mLeadPin").value = "";
+  $("newCode").textContent = m.code;
+  $("createdInfo").innerHTML =
+    "<b>"+esc(m.title)+"</b><br>"+
+    m.dates.map(function(s){ return dLabel(s)+"("+dowLabel(s)+")"; }).join(", ")+
+    " · "+hLabel(hs)+"–"+(he===24?"24:00":hLabel(he))+" · 1시간 단위 "+slots(m).length+"개 슬롯"+
+    (m.leaderPin ? "<br>🔒 팀장 화면은 팀장 비밀번호를 입력해야 열립니다." : "");
+  show("created");
+}
+
+/* ---------- 참여 ---------- */
+var activeCode = null, myName = "", myPin = null, myState = {}, brush = "ok", painting = false, paintCount = 0, openTime = 0;
+var resultFromJoin = false;   // 결과 화면에 팀원으로 들어왔는지
+
+function findResp(m, name){
+  return m.responses.filter(function(r){ return r.name === name; })[0] || null;
+}
+function doJoin(){
+  var err = $("joinErr"); err.textContent = "";
+  var code = $("joinCode").value.trim().toUpperCase();
+  var name = $("joinName").value.trim();
+  var pin = $("joinPin").value;
+  if(code.length !== 6){ err.textContent = "6자리 회의 코드를 입력해주세요."; return; }
+  var m = getMeeting(code);
+  if(!m){ err.textContent = "그런 회의 코드를 찾을 수 없습니다. 코드를 다시 확인해주세요."; return; }
+  if(!name){ err.textContent = "이름을 입력해주세요."; return; }
+
+  var prev = findResp(m, name);
+
+  // 잠긴 이름이면 비밀번호가 맞아야 열 수 있다.
+  if(prev && prev.pin){
+    if(!pin){
+      err.textContent = "“"+name+"”"+josa(name,"은","는")+" 개인 비밀번호로 잠겨 있습니다. 비밀번호를 입력하거나 다른 이름을 쓰세요.";
+      log("pin_required", code, name, "");
+      return;
+    }
+    if(hashPin(code, pin) !== prev.pin){
+      err.textContent = "비밀번호가 일치하지 않습니다. 잊었다면 팀장에게 응답 삭제를 요청하세요.";
+      log("pin_fail", code, name, "");
+      return;
+    }
+  }
+
+  activeCode = code; myName = name; save(K.N, name);
+  myPin = prev && prev.pin ? prev.pin : (pin ? hashPin(code, pin) : null);
+  $("joinPin").value = "";
+  log("member_open", code, name, prev ? "returning" : "new");
+  if(picksOf(m)){ resultFromJoin = true; renderResult(m); show("result"); return; }
+  resultFromJoin = false;
+  startRespond(m, name);
+}
+function startRespond(m, name){
+  myState = {};
+  var prev = findResp(m, name);
+  var sl = slots(m);
+  sl.forEach(function(s){ myState[s.key] = "ok"; });
+  if(prev) Object.keys(prev.slots).forEach(function(k){ if(myState[k] !== undefined) myState[k] = prev.slots[k]; });
+  brush = "ok"; paintCount = 0; openTime = Date.now();
+  setBrush("ok");
+  $("rTitle").textContent = esc(m.title);
+
+  var nt = $("rNotice");
+  if(prev){
+    nt.style.display = "block";
+    nt.innerHTML = "<b>"+esc(name)+"</b>님이 전에 입력한 시간을 불러왔습니다. 고친 뒤 다시 제출하면 덮어씁니다."
+      + (prev.pin ? " 🔒 비밀번호로 잠긴 이름입니다."
+                  : (myPin ? " 이번 제출부터 🔒 비밀번호가 걸립니다."
+                           : " 본인이 아니라면 뒤로 가서 다른 이름을 쓰세요."));
+  } else if(myPin){
+    nt.style.display = "block";
+    nt.innerHTML = "제출하면 <b>"+esc(name)+"</b> 이름에 🔒 비밀번호가 걸립니다. 다음에 같은 이름과 비밀번호로 들어와 수정하세요.";
+  } else {
+    nt.style.display = "none";
+  }
+  $("submitResp").textContent = prev ? "수정해서 다시 제출하기" : "제출하기";
+
+  drawRespGrid(m);
+  log(prev ? "member_edit_open" : "member_input_start", m.code, name, prev ? "revise" : "new");
+  show("respond");
+}
+function setBrush(b){
+  brush = b;
+  Array.prototype.forEach.call(document.querySelectorAll(".brush"), function(el){
+    el.classList.toggle("on", el.getAttribute("data-b") === b);
+  });
+}
+function gridTemplate(m){ return "44px repeat("+m.dates.length+", minmax(58px, 1fr))"; }
+function drawRespGrid(m){
+  var g = $("respGrid");
+  g.style.gridTemplateColumns = gridTemplate(m);
+  var html = '<div></div>';
+  m.dates.forEach(function(s){ html += '<div class="gh">'+dLabel(s)+'<small>'+dowLabel(s)+'</small></div>'; });
+  for(var h=m.hStart; h<m.hEnd; h++){
+    html += '<div class="hr">'+hLabel(h)+'</div>';
+    for(var d=0; d<m.dates.length; d++){
+      var k = d+"-"+h;
+      html += '<div class="cell" data-k="'+k+'" data-s="'+myState[k]+'">'+mark(myState[k])+'</div>';
+    }
+  }
+  g.innerHTML = html;
+  bindPaint(g);
+}
+function mark(s){ return s === "prefer" ? "★" : (s === "no" ? "✕" : ""); }
+function bindPaint(g){
+  Array.prototype.forEach.call(g.querySelectorAll(".cell"), function(c){
+    c.addEventListener("pointerdown", function(e){
+      e.preventDefault(); painting = true; apply(c);
+      try{ c.releasePointerCapture(e.pointerId); }catch(err){}
+    });
+    c.addEventListener("pointerenter", function(){ if(painting) apply(c); });
+  });
+}
+function apply(c){
+  var k = c.getAttribute("data-k");
+  if(myState[k] === brush) return;
+  myState[k] = brush; c.setAttribute("data-s", brush); c.textContent = mark(brush);
+  paintCount++;
+}
+window.addEventListener("pointerup", function(){ painting = false; });
+
+function submitResp(){
+  var m = getMeeting(activeCode); if(!m) return;
+  var prev = findResp(m, myName);
+  var rec = {name:myName, ts:Date.now(), pin:myPin || null, slots:{}};
+  Object.keys(myState).forEach(function(k){ rec.slots[k] = myState[k]; });
+  m.responses = m.responses.filter(function(r){ return r.name !== myName; });
+  m.responses.push(rec);
+  putMeeting(m);
+  var secs = Math.round((Date.now() - openTime)/1000);
+  log(prev ? "member_revise" : "member_submit", m.code, myName, "입력"+secs+"초/조작"+paintCount+"회"+(rec.pin?"/잠금":""));
+  var nNo = 0, nPref = 0;
+  Object.keys(rec.slots).forEach(function(k){ if(rec.slots[k]==="no") nNo++; else if(rec.slots[k]==="prefer") nPref++; });
+  $("doneSub").innerHTML = esc(myName)+"님의 응답이 "+(prev?"수정":"저장")+"되었습니다. 불가능 "+nNo+"칸, ⭐선호 "+nPref+"칸.";
+  $("doneEditHint").innerHTML = rec.pin
+    ? "🔒 <b>"+esc(myName)+"</b> 이름이 개인 비밀번호로 잠겼습니다. 다음에 같은 이름과 비밀번호로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요."
+    : "다음에 <b>"+esc(myName)+"</b> 이름으로 <b>회의 참여하기</b>에 들어오면 이 시간표를 수정할 수 있어요. 팀원과 이름이 겹칠 것 같으면 개인 비밀번호를 정해두세요.";
+  $("respCode").textContent = encodeResp(m, rec);
+  show("done");
+}
+function encodeResp(m, r){
+  var str = slots(m).map(function(s){
+    var v = r.slots[s.key];
+    return v === "no" ? "0" : (v === "prefer" ? "2" : "1");
+  }).join("");
+  return "R1." + b64e(JSON.stringify({c:m.code, n:r.name, s:str, p:r.pin || ""}));
+}
+function decodeResp(text){
+  text = String(text).trim();
+  if(text.indexOf("R1.") !== 0) throw new Error("응답 코드는 R1. 으로 시작해야 합니다.");
+  var o;
+  try{ o = JSON.parse(b64d(text.slice(3))); }
+  catch(e){ throw new Error("코드가 손상되었습니다. 전체를 다시 복사해 붙여넣어 주세요."); }
+  if(!o || !o.c || !o.n || !o.s) throw new Error("코드가 손상되었습니다. 전체를 다시 복사해 붙여넣어 주세요.");
+  return o;
+}
+
+/* ---------- 집계 & 추천 ---------- */
+function tally(m){
+  var sl = slots(m), total = m.responses.length;
+  return sl.map(function(s){
+    var avail = 0, pref = 0, absent = [];
+    m.responses.forEach(function(r){
+      var v = r.slots[s.key] || "ok";
+      if(v === "no") absent.push(r.name);
+      else { avail++; if(v === "prefer") pref++; }
+    });
+    return {d:s.d, h:s.h, key:s.key, avail:avail, pref:pref, absent:absent,
+            all:(total>0 && avail===total), score:pref*2 + (avail-pref)};
+  });
+}
+function rank(m){
+  var t = tally(m).slice();
+  t.sort(function(a,b){
+    if(b.avail !== a.avail) return b.avail - a.avail;   // 1. 참여 가능 인원 우선 (전원 가능 포함)
+    if(b.pref !== a.pref) return b.pref - a.pref;       // 2. 선호 수 우선
+    if(a.d !== b.d) return a.d - b.d;                   // 3. 이른 날짜
+    return a.h - b.h;                                   // 4. 이른 시간
+  });
+  return t;
+}
+
+/* ---------- 대시보드 ---------- */
+var authed = {};   // 이 세션에서 팀장 확인을 통과한 회의 (저장하지 않음)
+
+function isOwner(code){ return load(K.O, []).indexOf(code) >= 0; }
+function openDash(code){
+  var m = getMeeting(code); if(!m){ toast("회의를 찾을 수 없습니다"); return; }
+  activeCode = code;
+  if(m.leaderPin && !authed[code]){
+    $("leadSub").innerHTML = "<b>"+esc(m.title)+"</b> · 회의 코드 "+m.code;
+    $("leadPin").value = ""; $("leadErr").textContent = "";
+    log("leader_gate", code, "leader", "");
+    show("lead"); setTimeout(function(){ $("leadPin").focus(); }, 60);
+    return;
+  }
+  renderDash(m);
+  log("recommend_view", code, "leader", "응답"+m.responses.length+"명");
+  show("dash");
+}
+function doLeadAuth(){
+  var m = getMeeting(activeCode); if(!m) return;
+  var pin = $("leadPin").value;
+  if(!pin){ $("leadErr").textContent = "팀장 비밀번호를 입력해주세요."; return; }
+  if(hashPin(m.code, pin) !== m.leaderPin){
+    $("leadErr").textContent = "팀장 비밀번호가 일치하지 않습니다.";
+    log("leader_gate_fail", m.code, "leader", "");
+    return;
+  }
+  authed[m.code] = true; $("leadPin").value = "";
+  openDash(m.code);
+}
+var pickKey = null;
+function renderDash(m){
+  $("dTitle").textContent = m.title;
+  $("dSub").innerHTML = "팀장 화면 · 회의 코드 <b>"+m.code+"</b>";
+  var n = m.responses.length;
+  var pk = picksOf(m);
+
+  // 회의 정보는 확정 뒤에도 계속 남는다.
+  $("dInfo").innerHTML =
+    '<dt>날짜</dt><dd>'+m.dates.map(function(s){ return dLabel(s)+"("+dowLabel(s)+")"; }).join(", ")+'</dd>'+
+    '<dt>시간 범위</dt><dd>'+hLabel(m.hStart)+"–"+(m.hEnd===24?"24:00":hLabel(m.hEnd))+" · 1시간 단위 "+slots(m).length+'칸</dd>'+
+    '<dt>팀 인원</dt><dd>'+m.size+'명</dd>'+
+    '<dt>만든 날</dt><dd>'+new Date(m.createdAt).toLocaleString("ko-KR")+'</dd>'+
+    '<dt>팀장 잠금</dt><dd>'+(m.leaderPin ? "🔒 사용 중" : "없음")+'</dd>';
+
+  var cf = $("dConfirmed");
+  if(pk){
+    cf.style.display = "block";
+    cf.className = "notice done";
+    cf.innerHTML = "✅ 1순위 <b>"+whenText(m, pk[0].d, pk[0].h)+"</b>으로 확정됨"
+      + (pk.length > 1 ? " · 예비 " + pk.slice(1).map(function(p, i){ return (i+2)+"순위 "+whenText(m, p.d, p.h); }).join(" / ") : "")
+      + "<br>아래에서 확정 순위를 다시 바꿀 수 있습니다.";
+  } else {
+    cf.style.display = "none";
+  }
+  var prefTotal = 0;
+  m.responses.forEach(function(r){ Object.keys(r.slots).forEach(function(k){ if(r.slots[k]==="prefer") prefTotal++; }); });
+  $("stResp").textContent = n + "명";
+  $("stRate").textContent = Math.round(n / m.size * 100) + "%";
+  $("stPref").textContent = prefTotal + "칸";
+  $("people").innerHTML = n
+    ? m.responses.map(function(r){
+        var p = 0; Object.keys(r.slots).forEach(function(k){ if(r.slots[k]==="prefer") p++; });
+        return '<span class="person">'+(r.pin?'<b class="lock" title="개인 비밀번호로 잠긴 이름">🔒</b>':'')+esc(r.name)
+          +(p?' <em>★'+p+'</em>':'')
+          +'<button class="pdel" data-name="'+esc(r.name)+'" title="이 응답 삭제" aria-label="'+esc(r.name)+' 응답 삭제">×</button></span>';
+      }).join("")
+    : '<span class="hint">아직 응답한 팀원이 없습니다. 코드를 공유해보세요.</span>';
+  Array.prototype.forEach.call($("people").querySelectorAll(".pdel"), function(b){
+    b.onclick = function(){
+      var nm = b.getAttribute("data-name");
+      if(!confirm(nm + "님의 응답을 삭제할까요? 비밀번호를 잊은 팀원은 삭제 후 다시 입력하면 됩니다.")) return;
+      var mm = getMeeting(m.code);
+      mm.responses = mm.responses.filter(function(r){ return r.name !== nm; });
+      putMeeting(mm);
+      log("response_delete", mm.code, "leader", nm);
+      renderDash(mm); toast(nm + "님 응답을 삭제했습니다");
+    };
+  });
+
+  var box = $("cands");
+  if(!n){
+    box.innerHTML = '<p class="hint">응답이 1건 이상 모이면 추천이 계산됩니다.</p>';
+  } else {
+    var r = rank(m), top = r.slice(0,3);
+    box.innerHTML = top.map(function(c, i){
+      var tags = '<span class="tag'+(c.all?" all":"")+'">'+c.avail+"/"+n+" 참석 가능</span>";
+      if(c.pref) tags += '<span class="tag pf">⭐ '+c.pref+"명 선호</span>";
+      if(c.absent.length) tags += '<span class="tag">불참 '+c.absent.map(esc).join(", ")+"</span>";
+      return '<div class="cand'+(i===0?" best":"")+'">'+
+        '<div class="rank">'+(i===0?"⭐ 추천 1순위":"추천 "+(i+1)+"순위")+'</div>'+
+        '<div class="when">'+whenText(m, c.d, c.h)+'</div>'+
+        '<div class="why">'+tags+'</div>'+
+        '<button class="'+(i===0?"primary":"sec")+'" data-k="'+c.key+'" data-r="'+i+'">'+
+        (i===0?"추천 순서 그대로 1·2·3순위 확정하기":"이 시간을 1순위로 올리기")+'</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-k]"), function(b){
+      b.onclick = function(){
+        var idx = parseInt(b.getAttribute("data-r"), 10);
+        if(idx === 0){ confirmPicks(m.code, r.slice(0,3).map(function(c){ return c.key; }), true); return; }
+        setPick1(m, b.getAttribute("data-k"));
+      };
+    });
+  }
+  fillPickSelects(m);
+  drawHeat(m);
+  pickKey = null; $("pickBox").innerHTML = "";
+}
+/* 확정 순위 선택 상자: 모든 시간칸을 시간순으로 담고, 기본값은 추천 1·2·3순위 */
+function fillPickSelects(m){
+  var t = tally(m), n = m.responses.length, r = rank(m), pk = picksOf(m);
+  var opts = t.map(function(c){
+    var lbl = whenText(m, c.d, c.h) + (n ? " · " + c.avail + "/" + n + " 참석" + (c.pref ? " · ★" + c.pref : "") : "");
+    return '<option value="'+c.key+'">'+lbl+'</option>';
+  }).join("");
+  var ids = ["pk1","pk2","pk3"];
+  ids.forEach(function(id, i){
+    var sel = $(id);
+    sel.innerHTML = (i === 0 ? "" : '<option value="">— 없음 —</option>') + opts;
+    var want = pk && pk[i] ? (pk[i].d + "-" + pk[i].h) : (n && r[i] ? r[i].key : "");
+    sel.value = want || (i === 0 && t.length ? t[0].key : "");
+  });
+  $("pickErr").textContent = "";
+  $("doConfirm").textContent = pk ? "확정 순위 바꾸기" : "이 순서로 확정하기";
+}
+function setPick1(m, key){
+  // 고른 시간을 1순위로 올리고 나머지를 한 칸씩 내린다. 중복은 버린다.
+  var order = [key];
+  [$("pk1").value, $("pk2").value, $("pk3").value].forEach(function(v){
+    if(v && order.indexOf(v) < 0) order.push(v);
+  });
+  $("pk1").value = order[0] || "";
+  $("pk2").value = order[1] || "";
+  $("pk3").value = order[2] || "";
+  $("pickErr").textContent = "";
+  $("pickCard").scrollIntoView({block:"center", behavior:"smooth"});
+  toast("1순위 후보로 올렸습니다");
+}
+function submitPicks(){
+  var m = getMeeting(activeCode); if(!m) return;
+  var vals = [$("pk1").value, $("pk2").value, $("pk3").value].filter(function(v){ return !!v; });
+  var err = $("pickErr"); err.textContent = "";
+  if(!vals.length){ err.textContent = "1순위 회의시간을 선택해주세요."; return; }
+  for(var i=0;i<vals.length;i++) for(var j=i+1;j<vals.length;j++){
+    if(vals[i] === vals[j]){ err.textContent = "같은 시간을 두 순위에 넣을 수 없습니다."; return; }
+  }
+  confirmPicks(m.code, vals, false);
+}
+function drawHeat(m){
+  var g = $("heatGrid"), t = tally(m), byKey = {};
+  t.forEach(function(c){ byKey[c.key] = c; });
+  var n = m.responses.length;
+  g.style.gridTemplateColumns = gridTemplate(m);
+  var html = '<div></div>';
+  m.dates.forEach(function(s){ html += '<div class="gh">'+dLabel(s)+'<small>'+dowLabel(s)+'</small></div>'; });
+  for(var h=m.hStart; h<m.hEnd; h++){
+    html += '<div class="hr">'+hLabel(h)+'</div>';
+    for(var d=0; d<m.dates.length; d++){
+      var c = byKey[d+"-"+h];
+      var ratio = n ? c.avail/n : 0;
+      var bg = n ? "color-mix(in srgb, var(--ok-soft) "+Math.round((1-ratio)*100)+"%, var(--ok) "+Math.round(ratio*60+18)+"%)" : "var(--surface-2)";
+      var label = n ? (c.avail + (c.pref ? "★"+c.pref : "")) : "";
+      html += '<div class="heat" data-k="'+c.key+'" style="background:var(--surface-2);background:'+bg+'">'+label+'</div>';
+    }
+  }
+  g.innerHTML = html;
+  Array.prototype.forEach.call(g.querySelectorAll(".heat"), function(el){
+    el.onclick = function(){
+      var k = el.getAttribute("data-k"), c = byKey[k];
+      Array.prototype.forEach.call(g.querySelectorAll(".heat"), function(x){ x.classList.remove("pick"); });
+      el.classList.add("pick"); pickKey = k;
+      $("pickBox").innerHTML =
+        '<div class="cand" style="margin-top:12px"><div class="rank">직접 선택</div>'+
+        '<div class="when">'+whenText(m, c.d, c.h)+'</div>'+
+        '<div class="why"><span class="tag'+(c.all?" all":"")+'">'+c.avail+"/"+(n||0)+' 참석 가능</span>'+
+        (c.pref?'<span class="tag pf">⭐ '+c.pref+'명 선호</span>':'')+'</div>'+
+        '<button class="sec" id="pickConfirm">이 시간을 1순위로 올리기</button></div>';
+      $("pickConfirm").onclick = function(){ setPick1(m, k); };
+    };
+  });
+}
+function confirmPicks(code, keys, tookRecommendation){
+  var m = getMeeting(code); if(!m) return;
+  var r = rank(m), recTop = r.length ? r[0].key : "";
+  var picks = keys.map(function(k){ var p = k.split("-"); return {d:+p[0], h:+p[1]}; });
+  var fromTop = tookRecommendation || (keys[0] === recTop);
+  m.confirmed = {ts:Date.now(), picks:picks, fromTop:fromTop};
+  putMeeting(m);
+  // 1순위가 추천 1순위와 다르면 override로 기록한다.
+  var idx = -1;
+  for(var i=0;i<r.length;i++) if(r[i].key === keys[0]){ idx = i; break; }
+  log("final_confirm", code, "leader", "1순위"+keys[0]+"/추천순위"+(idx>=0?idx+1:"-")+"/총"+picks.length+"개");
+  if(!fromTop) log("override_recommend", code, "leader", "선택순위"+(idx>=0?idx+1:"-"));
+  resultFromJoin = false;
+  renderResult(m); show("result");
+}
+
+/* ---------- 결과 ---------- */
+function renderResult(m){
+  var pk = picksOf(m), t = tally(m), n = m.responses.length, byKey = {};
+  t.forEach(function(x){ byKey[x.key] = x; });
+  var first = byKey[pk[0].d + "-" + pk[0].h];
+  $("resSub").textContent = m.title + " · 회의 코드 " + m.code;
+  $("resWhen").textContent = whenText(m, pk[0].d, pk[0].h);
+  $("resMeta").textContent = n
+    ? (first.avail + "/" + n + "명 참석 가능" + (first.pref ? " · " + first.pref + "명이 선호한 시간" : "") + (m.confirmed.fromTop ? " · 추천 1순위 그대로 확정" : " · 팀장이 직접 선택"))
+    : "응답 없음";
+
+  $("resBackup").innerHTML = pk.length > 1
+    ? pk.slice(1).map(function(p, i){
+        var c = byKey[p.d + "-" + p.h];
+        return '<div class="backup"><span class="bl">예비 '+(i+2)+'순위</span><span class="bw">'+whenText(m, p.d, p.h)+'</span>'+
+          '<span class="bm">'+(n ? c.avail+"/"+n+" 참석"+(c.pref?" · ★"+c.pref:"") : "")+'</span></div>';
+      }).join("")
+    : "";
+
+  var ab = $("resAbsent");
+  if(first && first.absent.length){
+    ab.style.display = "block";
+    ab.innerHTML = "1순위 시간에 불참인 팀원: <b>" + first.absent.map(esc).join(", ") + "</b>";
+  } else ab.style.display = "none";
+  $("resBackDash").style.display = isOwner(m.code) ? "block" : "none";
+  // 확정 순위는 팀장이 다시 바꿀 수 있으니, 팀원도 자기 시간을 계속 고칠 수 있게 둔다.
+  $("resEdit").style.display = (resultFromJoin && myName) ? "block" : "none";
+}
+function resultText(m){
+  var pk = picksOf(m);
+  var s = "["+m.title+"] 회의시간이 "+whenText(m, pk[0].d, pk[0].h)+"으로 확정되었습니다.";
+  if(pk.length > 1){
+    s += "\n예비: " + pk.slice(1).map(function(p, i){ return (i+2)+"순위 "+whenText(m, p.d, p.h); }).join(" / ");
+  }
+  return s + "\n(회의 코드 "+m.code+")";
+}
+
+/* ---------- CSV ---------- */
+function exportCsv(){
+  var rows = load(K.L, []);
+  if(!rows.length){ toast("기록된 로그가 없습니다"); return; }
+  var head = "ts,iso,event,code,actor,meta";
+  var body = rows.map(function(r){
+    return [r.ts, r.iso, r.event, r.code, '"'+String(r.actor).replace(/"/g,'""')+'"', '"'+String(r.meta).replace(/"/g,'""')+'"'].join(",");
+  }).join("\n");
+  saveFile("v3_event_log.csv", "﻿"+head+"\n"+body);
+}
+function saveFile(name, text){
+  // claude.ai 아티팩트로 볼 때는 downloads 권한을 통해 저장한다.
+  if(window.claude && typeof window.claude.use === "function"){
+    window.claude.use("downloads").then(function(dl){
+      if(!dl){ toast("이 화면에서는 파일 저장을 쓸 수 없습니다"); return; }
+      dl.save({filename:name, data:text}).then(function(){
+        toast("CSV를 내려받았습니다");
+      }, function(err){
+        var code = err && err.code;
+        if(code === "declined") return;
+        if(code === "extension_not_enabled"){
+          dl.save({filename:name.replace(/\.csv$/, ".txt"), data:text}).then(function(){
+            toast("txt로 저장했습니다. 확장자를 .csv로 바꿔 열어주세요");
+          }, function(){ toast("저장하지 못했습니다"); });
+          return;
+        }
+        toast("저장하지 못했습니다");
+      });
+    }, function(){ toast("저장하지 못했습니다"); });
+    return;
+  }
+  // 로컬 파일·일반 브라우저
+  var blob = new Blob([text], {type:"text/csv;charset=utf-8"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+  toast("CSV를 내려받았습니다");
+}
+
+/* ---------- 이벤트 바인딩 ---------- */
+$("homeBtn").onclick = function(){ renderHome(); show("home"); };
+$("goCreate").onclick = function(){ initCreate(); show("create"); };
+$("goJoin").onclick = function(){
+  $("joinCode").value = ""; $("joinErr").textContent = ""; $("joinPin").value = "";
+  $("joinName").value = load(K.N, "") || "";
+  show("join"); setTimeout(function(){ $("joinCode").focus(); }, 60);
+};
+$("calPrev").onclick = function(){ calM--; if(calM < 0){ calM = 11; calY--; } drawCal(); };
+$("calNext").onclick = function(){ calM++; if(calM > 11){ calM = 0; calY++; } drawCal(); };
+$("createBtn").onclick = createMeeting;
+
+$("copyCode").onclick = function(){
+  log("share_click", activeCode, "leader", "code");
+  copy(activeCode, "회의 코드를 복사했습니다");
+};
+$("copyInvite").onclick = function(){
+  var m = getMeeting(activeCode); if(!m) return;
+  log("share_click", activeCode, "leader", "invite");
+  copy("["+m.title+"] 회의시간 조율 중입니다.\n사이트에서 [회의 참여하기]를 누르고 회의 코드 "+m.code+" 를 입력한 뒤,\n안 되는 시간은 불가능으로 빼고 좋은 시간에 ⭐선호를 눌러주세요.\n조율 범위: "+m.dates.map(function(s){ return dLabel(s)+"("+dowLabel(s)+")"; }).join(", ")+" "+hLabel(m.hStart)+"–"+(m.hEnd===24?"24:00":hLabel(m.hEnd)), "초대 문구를 복사했습니다");
+};
+$("toDash").onclick = function(){ openDash(activeCode); };
+
+$("joinCode").addEventListener("input", function(){ this.value = this.value.toUpperCase(); });
+$("joinBtn").onclick = doJoin;
+$("joinCode").addEventListener("keydown", function(e){ if(e.key === "Enter") $("joinName").focus(); });
+$("joinName").addEventListener("keydown", function(e){ if(e.key === "Enter") doJoin(); });
+$("joinPin").addEventListener("keydown", function(e){ if(e.key === "Enter") doJoin(); });
+
+Array.prototype.forEach.call(document.querySelectorAll(".brush"), function(b){
+  b.onclick = function(){ setBrush(b.getAttribute("data-b")); };
+});
+$("submitResp").onclick = submitResp;
+$("respBack").onclick = function(){ show("join"); };
+
+$("copyResp").onclick = function(){ copy($("respCode").textContent, "응답 코드를 복사했습니다"); };
+$("editResp").onclick = function(){ var m = getMeeting(activeCode); if(m) startRespond(m, myName); };
+$("doneHome").onclick = function(){ renderHome(); show("home"); };
+
+$("dashShare").onclick = function(){
+  log("share_click", activeCode, "leader", "code");
+  copy(activeCode, "회의 코드를 복사했습니다");
+};
+$("dashPaste").onclick = function(){
+  var txt = prompt("팀원에게 받은 응답 코드를 붙여넣으세요 (R1.로 시작)");
+  if(!txt) return;
+  var m = getMeeting(activeCode); if(!m) return;
+  try{
+    var o = decodeResp(txt);
+    if(o.c !== m.code) throw new Error("다른 회의의 응답 코드입니다.");
+    var sl = slots(m);
+    if(o.s.length !== sl.length) throw new Error("회의 설정과 맞지 않는 응답 코드입니다.");
+    var old = m.responses.filter(function(r){ return r.name === o.n; })[0];
+    var rec = {name:o.n, ts:Date.now(), pin:(o.p || (old && old.pin) || null), slots:{}};
+    sl.forEach(function(s, i){
+      var ch = o.s[i];
+      rec.slots[s.key] = ch === "0" ? "no" : (ch === "2" ? "prefer" : "ok");
+    });
+    var existed = !!old;
+    m.responses = m.responses.filter(function(r){ return r.name !== o.n; });
+    m.responses.push(rec);
+    putMeeting(m);
+    log(existed ? "member_revise" : "member_submit", m.code, o.n, "응답코드 입력");
+    renderDash(m);
+    toast(o.n + "님 응답을 반영했습니다");
+  }catch(e){ alert("응답 코드를 읽을 수 없습니다.\n" + e.message); }
+};
+$("expLog").onclick = exportCsv;
+$("doConfirm").onclick = submitPicks;
+
+$("leadBtn").onclick = doLeadAuth;
+$("leadPin").addEventListener("keydown", function(e){ if(e.key === "Enter") doLeadAuth(); });
+$("leadBack").onclick = function(){ renderHome(); show("home"); };
+
+$("copyResult").onclick = function(){ var m = getMeeting(activeCode); if(m) copy(resultText(m), "공지 문구를 복사했습니다"); };
+$("resBackDash").onclick = function(){ openDash(activeCode); };
+$("resEdit").onclick = function(){ var m = getMeeting(activeCode); if(m) startRespond(m, myName); };
+$("resHome").onclick = function(){ renderHome(); show("home"); };
+
+/* ---------- 시작 ---------- */
+log("home_view", "", "", "");
+renderHome();
+})();
+</script>
+<!--ARTIFACT-END-->
+</body>
+</html>
