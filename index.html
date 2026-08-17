@@ -3,6 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SPGJSWT6JJ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-SPGJSWT6JJ');
+</script>
+
 <!--ARTIFACT-START-->
 <title>회의시간 자동합의 V3</title>
 <style>
@@ -580,9 +590,26 @@ function forgetOwned(code){
   var meta = load(K.OM, {}); delete meta[code]; save(K.OM, meta);
 }
 
+/* ---------- Google Analytics ----------
+   팀원 이름(actor)과 자유서술 meta는 보내지 않는다. 개인정보를 외부로 넘기지 않기 위해서다.
+   GA에는 무엇이 몇 번 일어났는지와 숫자 지표만 남기고, 이름이 붙은 상세는
+   events 테이블과 CSV에만 둔다. */
+function ga(name, params){
+  if(typeof window.gtag !== "function") return;
+  try{ window.gtag("event", name, params || {}); }catch(e){}
+}
+function gaEvent(ev, code, meta){
+  var p = {};
+  if(code) p.meeting_code = code;
+  var s = /(\d+)초/.exec(meta || "");        if(s) p.seconds = parseInt(s[1], 10);
+  var c = /조작(\d+)회/.exec(meta || "");     if(c) p.interactions = parseInt(c[1], 10);
+  ga(ev, p);
+}
+
 /* ---------- 행동로그 ----------
    서버 모드에서는 events 테이블에도 남겨 모든 팀원 기기의 로그가 한곳에 모인다. */
 function log(ev, code, actor, meta){
+  gaEvent(ev, code, meta);
   var arr = load(K.L, []);
   arr.push({ts:Date.now(), iso:new Date().toISOString(), event:ev, code:code||"", actor:actor||"", meta:meta==null?"":String(meta)});
   if(arr.length > 3000) arr = arr.slice(-3000);
@@ -785,12 +812,19 @@ function fail(e){
 
 /* ---------- 화면 전환 ---------- */
 var cur = "home";
+var SCREEN_TITLE = {
+  home:"홈", create:"회의 만들기", created:"코드 발급", lead:"팀장 확인",
+  join:"회의 참여", respond:"시간 입력", done:"제출 완료",
+  dash:"팀장 화면", result:"확정 결과"
+};
 function show(name){
   var list = document.querySelectorAll(".screen");
   for(var i=0;i<list.length;i++) list[i].classList.remove("on");
   $("s-"+name).classList.add("on");
   cur = name;
   window.scrollTo(0,0);
+  // URL이 바뀌지 않는 단일 페이지라 화면 전환을 직접 알려야 GA에 흐름이 남는다.
+  ga("screen_view", {screen_name:name, screen_title:SCREEN_TITLE[name] || name});
 }
 
 /* ---------- 홈 ---------- */

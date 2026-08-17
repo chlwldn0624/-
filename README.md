@@ -122,6 +122,20 @@ publishable(anon) 키는 원래 브라우저에 노출되는 값이다. 환경�
 팀 공유 모드에서는 로그가 `events` 테이블에 모이므로 **모든 팀원 기기의 행동이 한 CSV로 나온다.**
 브라우저 저장 모드에서는 그 기기의 로그만 나온다.
 
+## Google Analytics
+
+측정 ID `G-SPGJSWT6JJ` 로 GA4에 붙어 있다. 화면이 바뀌어도 URL이 그대로인 단일 페이지라
+기본 스니펫만으로는 첫 진입 1건밖에 안 잡힌다. 그래서 두 가지를 직접 보낸다.
+
+- `screen_view` — 화면이 바뀔 때마다 (`screen_name`, `screen_title`)
+- 위 행동로그 이벤트 전부 — `schedule_create`, `member_submit`, `final_confirm` 등
+
+**팀원 이름은 GA로 보내지 않는다.** 보내는 값은 `meeting_code` 와 숫자 지표(`seconds`,
+`interactions`)뿐이고, 이름이 들어갈 수 있는 `actor` 와 자유서술 `meta` 는 전달 경로 자체가 없다.
+이름이 붙은 상세는 `events` 테이블과 CSV에만 남는다.
+
+GA 스니펫은 `<head>` 의 아티팩트 구간 밖에 있어서, 아티팩트로 배포한 사본에는 포함되지 않는다.
+
 ## 권한
 
 - 팀장 화면은 회의를 만든 기기에서 바로 열린다. 다른 기기에서는 첫 화면의
